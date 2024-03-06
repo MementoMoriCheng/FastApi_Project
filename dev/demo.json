@@ -1,0 +1,50 @@
+{
+  "name": "planA",
+  "coach": {
+    "id": [
+      "7",
+      "8",
+      "6",
+      "5 "
+    ],
+    "table": "coach"
+  },
+  "plane": {
+    "id": [
+      "4",
+      "5",
+      "6"
+    ],
+    "table": "plane"
+  },
+  "status": 1,
+  "student": {
+    "id": [
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11"
+    ],
+    "table": "student"
+  },
+  "end_time": "2024-02-28 20:00:00",
+  "fly_route": {
+    "id": [
+      "4",
+      "5",
+      "6"
+    ],
+    "table": "fly_route"
+  },
+  "start_time": "2024-02-28 08:00:00",
+  "handle_user": null,
+  "exclude_time": [],
+  "coach_most_ply": 5,
+  "plane_most_ply": 5,
+  "flight_duration": 120,
+  "flight_interval": 30,
+  "student_most_ply": 10
+}

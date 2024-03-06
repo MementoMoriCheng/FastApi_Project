@@ -1,0 +1,1007 @@
+[
+  {
+    'student_id': '7',
+    'route_id': '4',
+    'coach_id': '8',
+    'plane_id': '4',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 08:00:00',
+    'plan_time_end': '2024-02-28 10:00:00',
+    'real_time_start': '2024-02-28 08:00:00',
+    'real_time_end': '2024-02-28 10:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '8',
+    'route_id': '4',
+    'coach_id': '8',
+    'plane_id': '4',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 10:30:00',
+    'plan_time_end': '2024-02-28 12:30:00',
+    'real_time_start': '2024-02-28 10:30:00',
+    'real_time_end': '2024-02-28 12:30:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '7',
+    'route_id': '4',
+    'coach_id': '8',
+    'plane_id': '4',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 13:00:00',
+    'plan_time_end': '2024-02-28 15:00:00',
+    'real_time_start': '2024-02-28 13:00:00',
+    'real_time_end': '2024-02-28 15:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '8',
+    'route_id': '4',
+    'coach_id': '8',
+    'plane_id': '4',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 15:30:00',
+    'plan_time_end': '2024-02-28 17:30:00',
+    'real_time_start': '2024-02-28 15:30:00',
+    'real_time_end': '2024-02-28 17:30:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '7',
+    'route_id': '4',
+    'coach_id': '8',
+    'plane_id': '4',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 18:00:00',
+    'plan_time_end': '2024-02-28 20:00:00',
+    'real_time_start': '2024-02-28 18:00:00',
+    'real_time_end': '2024-02-28 20:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '9',
+    'route_id': '5',
+    'coach_id': '6',
+    'plane_id': '5',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 08:00:00',
+    'plan_time_end': '2024-02-28 10:00:00',
+    'real_time_start': '2024-02-28 08:00:00',
+    'real_time_end': '2024-02-28 10:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '10',
+    'route_id': '5',
+    'coach_id': '6',
+    'plane_id': '5',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 10:30:00',
+    'plan_time_end': '2024-02-28 12:30:00',
+    'real_time_start': '2024-02-28 10:30:00',
+    'real_time_end': '2024-02-28 12:30:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '9',
+    'route_id': '5',
+    'coach_id': '6',
+    'plane_id': '5',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 13:00:00',
+    'plan_time_end': '2024-02-28 15:00:00',
+    'real_time_start': '2024-02-28 13:00:00',
+    'real_time_end': '2024-02-28 15:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '10',
+    'route_id': '5',
+    'coach_id': '6',
+    'plane_id': '5',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 15:30:00',
+    'plan_time_end': '2024-02-28 17:30:00',
+    'real_time_start': '2024-02-28 15:30:00',
+    'real_time_end': '2024-02-28 17:30:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '9',
+    'route_id': '5',
+    'coach_id': '6',
+    'plane_id': '5',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 18:00:00',
+    'plan_time_end': '2024-02-28 20:00:00',
+    'real_time_start': '2024-02-28 18:00:00',
+    'real_time_end': '2024-02-28 20:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '5',
+    'route_id': '6',
+    'coach_id': '7',
+    'plane_id': '6',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 08:00:00',
+    'plan_time_end': '2024-02-28 10:00:00',
+    'real_time_start': '2024-02-28 08:00:00',
+    'real_time_end': '2024-02-28 10:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '6',
+    'route_id': '6',
+    'coach_id': '7',
+    'plane_id': '6',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 10:30:00',
+    'plan_time_end': '2024-02-28 12:30:00',
+    'real_time_start': '2024-02-28 10:30:00',
+    'real_time_end': '2024-02-28 12:30:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '11',
+    'route_id': '6',
+    'coach_id': '7',
+    'plane_id': '6',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 13:00:00',
+    'plan_time_end': '2024-02-28 15:00:00',
+    'real_time_start': '2024-02-28 13:00:00',
+    'real_time_end': '2024-02-28 15:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '5',
+    'route_id': '6',
+    'coach_id': '7',
+    'plane_id': '6',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 15:30:00',
+    'plan_time_end': '2024-02-28 17:30:00',
+    'real_time_start': '2024-02-28 15:30:00',
+    'real_time_end': '2024-02-28 17:30:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  },
+  {
+    'student_id': '6',
+    'route_id': '6',
+    'coach_id': '7',
+    'plane_id': '6',
+    'plan_duration': 120,
+    'plan_time_start': '2024-02-28 18:00:00',
+    'plan_time_end': '2024-02-28 20:00:00',
+    'real_time_start': '2024-02-28 18:00:00',
+    'real_time_end': '2024-02-28 20:00:00',
+    'handle_user': None,
+    'handle_reason': None,
+    'status': 1,
+    'name': 'planA',
+    'description': None,
+    'expand_data': {
+      'name': 'planA',
+      'fly_route': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'fly_route'
+      },
+      'status': 1,
+      'plane': {
+        'id': [
+          '4',
+          '5',
+          '6'
+        ],
+        'table': 'plane'
+      },
+      'coach': {
+        'id': [
+          '7',
+          '8',
+          '6',
+          '5 '
+        ],
+        'table': 'coach'
+      },
+      'student': {
+        'id': [
+          '5',
+          '6',
+          '7',
+          '8',
+          '9',
+          '10',
+          '11'
+        ],
+        'table': 'student'
+      },
+      'handle_user': None,
+      'description': None,
+      'plane_most_ply': 5,
+      'coach_most_ply': 5,
+      'student_most_ply': 10,
+      'flight_interval': 30,
+      'flight_duration': 120,
+      'start_time': '2024-02-28 08:00:00',
+      'end_time': '2024-02-28 20:00:00',
+      'exclude_time': []
+    }
+  }
+]
