@@ -52,8 +52,11 @@ class Settings(BaseSettings):
     FTP_ROOT_PATH: str = dotenv_config.get("FTP_ROOT_PATH")
     FTP_REMOTE_BASE: str = dotenv_config.get("FTP_REMOTE_BASE")
     FTP_REMOTE_PATH: str = dotenv_config.get("FTP_REMOTE_PATH")
+    FTP_REMOTE_BACKUPS_PATH: str = dotenv_config.get("FTP_REMOTE_BACKUPS_PATH")
     FTP_COMPOSITE_EXPERIMENT: str = dotenv_config.get("FTP_COMPOSITE_EXPERIMENT")
     FTP_SECRET_KEY: str = dotenv_config.get("FTP_SECRET_KEY")
+
+    LOCAL_DOWNLOAD_FILE_PATH: str = dotenv_config.get("LOCAL_DOWNLOAD_FILE_PATH")
 
     UDP_ADDRESS: str = dotenv_config.get("UDP_ADDRESS")
     UDP_PORT: int = dotenv_config.get("UDP_PORT")
@@ -62,6 +65,9 @@ class Settings(BaseSettings):
 
     LOG_PATH: str = dotenv_config.get("LOG_PATH")
     LOG_NAME: str = dotenv_config.get("LOG_NAME")
+
+    SYNC_USER_URL: str = dotenv_config.get("SYNC_USER_URL")
+    UNSYNC_USER_URL: str = dotenv_config.get("UNSYNC_USER_URL")
 
 
 settings = Settings()

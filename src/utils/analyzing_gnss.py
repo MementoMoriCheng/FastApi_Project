@@ -100,45 +100,17 @@ def parse_gnss_data(data):
     print("Pitch: ", pitch)
     print("Checksum: ", checksum)
 
-    return struct.unpack('<bbbbhlddfffffffbbbffb', data), utc_date_time.strftime('%Y%m%d%H%M%S'), identify_code
+    return struct.unpack("<BBBBHlddfffffffBBBffB", data), utc_date_time.strftime('%Y%m%d%H%M%S'), identify_code
 
 
 if __name__ == '__main__':
     src_path = "D:\\File\\dzm9b"
     with open(src_path, "rb") as f:
         binary_content = f.read()
-
     split_strings = split_gnss_data(binary_content)
     # print(split_strings)
-    # target_byte = split_strings[301]
-    # a, _, _ = parse_gnss_data(target_byte)
+    target_byte = split_strings[300]
+    print(target_byte)
+    a, _, _ = parse_gnss_data(target_byte)
     # print(a)
-    # for target_byte in target_bytes:
-    #     parse_gnss_data(target_byte)
-    # gnss_data = {
-    #     'id': generate_uuid(),
-    #     'sync_code1': a[0],
-    #     'sync_code2': a[1],
-    #     'sync_code3': a[2],
-    #     'identify_code': a[3],
-    #     'gps_week': a[4],
-    #     'gps_milliseconds': a[5],
-    #     'latitude': a[6],
-    #     'longitude': a[7],
-    #     'altitude': a[8],
-    #     'latitude_stddev': a[9],
-    #     'longitude_stddev': a[10],
-    #     'altitude_stddev': a[11],
-    #     'horizon_speed': a[12],
-    #     'upward_speed': a[13],
-    #     'track_direction': a[14],
-    #     'positioning_status_satellite_count': a[15],
-    #     'solution_satellite_count': a[16],
-    #     'differential_age': a[17],
-    #     'azimuth': a[18],
-    #     'pitch': a[19],
-    #     'checksum': a[20],
-    #     'create_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    # }
 
-    # sql_handle.add_records("gnss_data", gnss_data)

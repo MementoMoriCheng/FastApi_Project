@@ -143,16 +143,21 @@ class SqlHandle(object):
         try:
             with self.get_sync_session() as session:
                 table = self._get_table(table_name)
-                fields = [getattr(table.c, field) for field in fields] if fields else table.columns
+                columns = []
+                if fields:
+                    columns = [getattr(table.c, field.code if hasattr(field, 'code') else field) for field in fields]
+                    fields = columns
+                else:
+                    fields = table.columns
                 stmt = select(fields)
 
                 if conditions:
                     condition_clauses = []
                     for k, v in conditions.items():
                         if isinstance(v, dict):  # 处理包含操作符的对象
-                            operator = v["value"]
-                            operand = v.get("operand")
-                            condition_clauses.append(self._process_condition(getattr(table.c, k), operator, operand))
+                            value = v["value"]
+                            operator = v.get("operator")
+                            condition_clauses.append(self._process_condition(getattr(table.c, k), operator, value))
                         else:  # 默认为等于操作
                             condition_clauses.append(getattr(table.c, k) == v)
 
@@ -170,9 +175,8 @@ class SqlHandle(object):
                 column_names = results.keys()
                 data = [dict(zip(column_names, row)) for row in results.fetchall()]
                 return data
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Selection error for table {table_name}: {e}")
-            return []
 
     @staticmethod
     def create_column(column_name, column_type, primary_key=False):
@@ -347,3 +351,4 @@ class SqlHandle(object):
 
 
 sql_handle = SqlHandle()
+

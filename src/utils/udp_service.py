@@ -5,15 +5,14 @@
 # @File    : udp_service.py
 # @Software: PyCharm
 
-import asyncio
 import os
 import shutil
-import traceback
-from src.config.setting import settings
-from src.utils.analyzing_gnss import split_gnss_data, parse_gnss_data, generate_mysql_gnss_data
-from src.utils.ftp_util import RemoteFTPService
+import asyncio
 from .logger import logger
+from src.config.setting import settings
 from src.utils.sql_config import sql_handle
+from src.utils.ftp_util import RemoteFTPService
+from src.utils.analyzing_gnss import split_gnss_data, parse_gnss_data, generate_mysql_gnss_data
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
@@ -62,13 +61,12 @@ class UDPService:
             transport, _ = await self.loop.create_datagram_endpoint(lambda: self.udp_protocol,
                                                                     local_addr=server_address)
             print(f'UDP service init successfully, address is: {server_address}')
-        except:
-            logger.error(traceback.print_exc())
+        except Exception as err:
+            logger.error(err)
 
     async def start(self, loop):
         self.loop = loop
         await self.create(loop)
-
         print('UDP Service start successfully, Waiting for clients...')
 
     async def stop(self):
@@ -139,7 +137,9 @@ class UDPService:
                     encrypted_data = await ftp_util.encrypt_file(local_file_path)
                     with open(local_file_path, "wb") as f:
                         f.write(encrypted_data)
-                    remote_file_path = os.path.join(settings.FTP_REMOTE_PATH, file_name)
+                    remote_dir = os.path.join(settings.FTP_REMOTE_PATH, "gnss_data")
+                    await ftp_util.create_ftp_directory([remote_dir])
+                    remote_file_path = remote_dir + "/" + file_name
                     ftp_file = open(local_file_path, "rb")
                     await ftp_util.upload_encrypted_data_to_ftp(ftp_file, remote_file_path)
                     ftp_file.close()

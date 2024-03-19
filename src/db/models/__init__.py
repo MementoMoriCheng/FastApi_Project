@@ -9,3 +9,5 @@ from src.db.models.table_manage import TableManage
 from src.db.models.flying_service import FlyingService
 from src.db.models.menu_manage import MenuManage
 from src.db.models.log_manage import LogManage
+from src.db.models.document import Document
+

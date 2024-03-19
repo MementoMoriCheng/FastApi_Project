@@ -15,6 +15,9 @@ RESERVE = 0
 FATHER = 1
 SON = 0
 
+# 开关
+ENABLE = 1  # 角色已启用
+
 
 class RecordsStatusCode:
     """数据库记录日志状态码"""

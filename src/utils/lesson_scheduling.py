@@ -153,7 +153,7 @@ def is_overlapping(start1, end1, start2, end2):
     if isinstance(end2, str):
         end2 = datetime.strptime(end2, '%Y-%m-%d %H:%M:%S')
 
-    return (start1 < end2 and end1 > start2) or (start2 < end1 and end2 > start1)
+    return (start1 <= end2 and end1 >= start2) or (start2 <= end1 and end2 >= start1)
 
 
 def merge_overlapping_segments(segments):

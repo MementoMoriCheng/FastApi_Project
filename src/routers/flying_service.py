@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from src.utils.lesson_scheduling import gen_schedule, check_time
 from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
 from src.utils.responses import resp_200, resp_404, resp_500
-from src.db.schemas.flying_manage import FlyingPlanSchema, CreateFlyingPlan, UpdateFlyingPlan
+from src.db.schemas.flying_manage import FlyingPlanSchema, CreateFlyingPlan, UpdateFlyingPlan, SearchFlyingPlan
 
 router = APIRouter()
 
@@ -39,14 +39,14 @@ async def get_flying_service_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
     return resp_200(data=data)
 
 
-@router.get('', tags=['FlyingService'], summary="获取所有飞行计划的信息")
+@router.post('/search', tags=['FlyingService'], summary="获取所有飞行计划的信息")
 async def list_flying_service_info(
         dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
-        limit: int = Query(None),
-        offset: int = Query(None)
+        input_data: SearchFlyingPlan
 ):
     dal.setDb(FlyingService)
-    res = await dal.get_by_all(limit=limit, offset=offset, is_delete=RESERVE)
+
+    res = await dal.search(query=input_data)
     data = [FlyingPlanSchema.from_orm(ms) for ms in res]
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
@@ -130,14 +130,12 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
         obj_in["start_time"] = (latest_time + break_time_length).strftime("%Y-%m-%d %H:%M:%S")
     plan_info = gen_schedule(obj_in, expand_data, available_plane, available_coach, available_fly_route,
                              available_student)
-    for single_plane_info in plan_info:
-        res = await dal.create(single_plane_info)
-        if not res:
-            return resp_404()
+
+    await dal.create_all(plan_info)
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
                                              handle_user=input_data.handle_user, handle_params=input_data.dict(),
-                                             entity_id=res.id,
+                                             entity_id="",
                                              handle_reason=input_data.description if input_data.description else '创建一条飞行计划')
     await sql_handle.add_records("log_manage", mysql_log_data)
 
@@ -275,9 +273,8 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
                 unique_elements.append(element2)
         return unique_elements
 
-
     def check_plan(plan_info_list):
-        checked_conflict_plan, all_plan = [], []
+        checked_conflict_plan, all_plan, planed_list = [], [], []
         for plan_info in plan_info_list:
             plan_time_start, plan_time_end = plan_info["plan_time_start"], plan_info["plan_time_end"]
 
@@ -291,7 +288,10 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
                         checked_conflict_plan.append(
                             (plan_info["student_id"], plan_info["coach_id"], plan_info["plane_id"]))
 
-        return list(set(checked_conflict_plan)), list(set(all_plan))
+                    plan_obj = PlanObject(plan_info)
+                    planed_list.append(plan_obj)
+
+        return list(set(checked_conflict_plan)), list(set(all_plan)), planed_list
 
     def conflict_resolution(plan_info_list, checked_info, unique_elements):
         for idx, check_info in enumerate(checked_info):
@@ -303,8 +303,14 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
                         plan_info["student_id"] = unique_elements[idx][0]
                         plan_info["coach_id"] = unique_elements[idx][1]
                         plan_info["plane_id"] = unique_elements[idx][2]
+                        checked_info_list.append(unique_elements[idx])
                 except IndexError:
                     continue
+
+    class PlanObject:
+        def __init__(self, data_dict):
+            for key, value in data_dict.items():
+                setattr(self, key, value)
 
     try:
         allocate_datas = allocate_available_source()
@@ -318,13 +324,15 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
     end_list = []
     for con in plan_info_list:
         checked_info_list = []
-        checked_info, all_info = check_plan([con])
-        if not checked_info:
-            checked_info_list.append((con["student_id"], con["coach_id"], con["plane_id"]))
+        checked_info, all_info, planed = check_plan([con])
+        latest_plan_list.extend(planed)
         checked_info_list.extend(checked_info)
         all_info.extend(checked_info_list)
         unique_elements = find_unique_elements(all_info)
-        if not unique_elements:
+        if not unique_elements and not checked_info:
+            end_list.append(con)
+            continue
+        if not unique_elements and checked_info:
             continue
         random.shuffle(unique_elements)
         conflict_resolution([con], checked_info, unique_elements)
@@ -344,7 +352,7 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
 async def delete_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(FlyingService)
     logger.info(f"删除一条飞行计划:{id_}")
-    res = dal.get(id_)
+    res = await dal.get(id_)
     if not res:
         return resp_404()
     res = await dal.update(id_, {'is_delete': DELETE})
@@ -409,11 +417,15 @@ async def update_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     if not plan_info:
         await dal.update(id_, {'is_delete': RESERVE})
         return resp_200(data=plan_info, msg="无法修改")
-
+    list_data = []  # 修改后，返回id的list
     for single_plane_info in plan_info:
         res = await dal.create(single_plane_info)
         if not res:
             return resp_404()
+        else:
+            if hasattr(res, 'id'):
+                list_data.append(res.id)
+
     update_dal.setDb(FlyingService)
     del_res = await update_dal.update(id_, {'is_delete': DELETE, "handle_reason": obj_in.get("handle_reason")})
     if not del_res:
@@ -425,7 +437,7 @@ async def update_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                                              handle_reason=input_data.description if input_data.description else '编辑一条飞行计划')
     await sql_handle.add_records("log_manage", mysql_log_data)
 
-    return resp_200(data=plan_info)
+    return resp_200(data=list_data)
 
 
 @router.patch('/status/{id_}', tags=['FlyingService'],

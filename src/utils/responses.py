@@ -8,6 +8,7 @@
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi import status
+import httpx
 
 
 class BusinessStatusCode:
@@ -15,6 +16,7 @@ class BusinessStatusCode:
 
     SUCCESS = 0
     FAIL = -1
+
     OTHER_ERR = 9999
 
     INSERT_DB_ERR = 9994
@@ -23,13 +25,8 @@ class BusinessStatusCode:
     UPDATE_DB_ERR = 9991
     OTHER_DB_ERR = 9990
 
-    # 试验数据
-    NO_MATCH_TABLE_TEMPLATE = 1001  # 追加上传数据时，表头不匹配
-
-    # 搜索词
-    DUPLICATE_WORD = 4001  # 重复的搜索词
-
-    MCQ_RESULT_DIRECTORY_NOT_EXISTS = 4002  # 材料没有对应的 MCQ 计算结果文件夹，无法导出
+    REQUEST_SUCCESS = 200
+    REQUEST_PARAMETER_ERROR = 406
 
 
 def resp_200(*, code=BusinessStatusCode.SUCCESS, data=None, msg="OK"):
@@ -66,8 +63,28 @@ def resp_403(msg="Forbidden"):
     )
 
 
+def resp_406(msg="Request parameter error"):
+    """
+    业务定义错误状态，非HTTP状态
+    """
+    return JSONResponse(
+        content={"code": BusinessStatusCode.REQUEST_PARAMETER_ERROR, "detail": msg},
+        status_code=status.HTTP_400_BAD_REQUEST,
+    )
+
+
 def resp_500(msg="INTERNAL SERVER ERROR"):
     return JSONResponse(
         content={"detail": msg},
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
+
+
+async def fetch_external_data(url: str, data):
+    async with httpx.AsyncClient() as client:
+        json_data = [item if isinstance(item, str) else item.dict() for item in data]
+        response = await client.post(url, json=json_data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": "Failed to fetch external data"}

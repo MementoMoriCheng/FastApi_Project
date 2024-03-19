@@ -6,7 +6,7 @@
 # @Software: PyCharm
 
 
-from typing import Union
+from typing import Union, List
 from datetime import datetime
 from pydantic import BaseModel, fields, constr, validator
 
@@ -56,3 +56,11 @@ class TableManageSchema(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class UserSyncIn(BaseModel):
+    """同步用户"""
+    username: str
+    password: str
+    role_id: str
+    system_id: List[str]

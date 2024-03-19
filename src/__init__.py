@@ -106,8 +106,8 @@ def register_event(app):
     async def startup_event():
         print("startup UDP service.")
         loop = asyncio.get_running_loop()
-        asyncio.create_task(u_s.start(loop))
-        asyncio.create_task(u_s.connect_to_remote_server(loop))
+        await asyncio.create_task(u_s.start(loop))
+        await asyncio.create_task(u_s.connect_to_remote_server(loop))
 
     @app.on_event("shutdown")
     async def shutdown_event():

@@ -73,3 +73,10 @@ class UpdateFlyingPlan(BaseModel):
 
 class UpdateStatus(BaseModel):
     status: int = 2
+
+
+class SearchFlyingPlan(BaseModel):
+    real_time_start: Union[datetime, None]
+    real_time_end: Union[datetime, None]
+    limit: int = 10
+    offset: int = 0

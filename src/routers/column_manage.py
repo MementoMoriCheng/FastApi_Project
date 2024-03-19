@@ -8,14 +8,16 @@
 from src.db.dals import ExecDAL
 from src.utils.logger import logger, generate_mysql_log_data
 from src.db.models import ColumnManage, TableManage
-from src.utils.responses import resp_200, resp_404, resp_500
+from src.utils.responses import resp_200, resp_404, resp_500, resp_406
 from fastapi import APIRouter, Depends
 from src.utils.dependencies import DALGetter
 from src.utils.sql_config import sql_handle
+from src.utils.responses import BusinessStatusCode
 from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
 from src.db.schemas.column_manage import (
     CreateColumnManage, ColumnManageSchema, UpdateColumnManage, ColumnListSchema, SortColumnManage
 )
+from src.db.models import MenuManage
 
 router = APIRouter()
 
@@ -156,10 +158,15 @@ async def update_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
 
 @router.post("/sort", tags=["ColumnManage"], summary="数据库列：排序")
 async def sort_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: SortColumnManage):
-    dal.setDb(ColumnManage)
+    if obj_in is not None and len(obj_in.columns) > 0:
+        table_code = obj_in.table_code
+        if table_code == 'column_manage':
+            dal.setDb(ColumnManage)
+        elif table_code == 'menu_manage':
+            dal.setDb(MenuManage)
 
-    print('=' * 20, obj_in)
-    if len(obj_in.columns) > 0:
         for item in obj_in.columns:
             await dal.update(item.id, {"sort": item.sort})
-    return resp_200(data='200')
+        return resp_200(data='200')
+    else:
+        return resp_406(msg='请求参数错误')

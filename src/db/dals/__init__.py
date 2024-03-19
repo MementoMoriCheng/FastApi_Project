@@ -5,9 +5,10 @@
 # @File    : __init__.py
 # @Software: PyCharm
 import traceback
+from src.utils import generate_uuid
 from typing import Iterable, Mapping, Union
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete, update, or_
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,12 +16,36 @@ from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
 
 from src.utils.logger import logger
+from typing import List
+
+
+class SortBy:
+    sort_by: str
+    is_desc: bool = False
+
+    def __init__(self, sort: str, desc: bool):
+        self.sort_by = sort
+        self.desc = desc
 
 
 class DAL:
     def __init__(self, db, db_session: AsyncSession):
         self.db = db
         self.db_session = db_session
+
+    def __add_order_by(self, stmt: object, db: object, order_by_list: List[SortBy] = None) -> object:
+        if order_by_list and len(order_by_list):
+            for sort in order_by_list:
+                is_desc = sort.is_desc
+                key = sort.sort_by
+                if hasattr(db, key):
+                    order_by = getattr(db, sort.sort_by)
+                    if order_by:
+                        if is_desc:
+                            stmt = stmt.order_by(order_by.desc())
+                        else:
+                            stmt = stmt.order_by(order_by.asc())
+        return stmt
 
     async def get(self, id_=None):
         stmt = select(self.db)
@@ -61,6 +86,19 @@ class DAL:
         except SQLAlchemyError as e:
             logger.error(e)
             raise
+
+    async def buck_create(self, obj_list):
+        all_db_list = []
+        for obj_in in obj_list:
+            data = obj_in.dict(exclude_none=True)
+            if not data.get("id"):
+                data["id"] = generate_uuid()
+            db_obj = self.db(**data)
+            self.db_session.add(db_obj)
+            all_db_list.append(db_obj)
+        await self.db_session.commit()
+        await self.db_session.flush()
+        return all_db_list
 
     async def delete(self, id_):
         try:
@@ -154,7 +192,7 @@ class DAL:
         r = await self.db_session.execute(stmt)
         return r.scalars().first()
 
-    async def get_by_all(self, limit_=None, offset_=None, **conditions):
+    async def get_by_all(self, limit_=None, offset_=None, order_by_list: List[SortBy] = None, **conditions):
         stmt = select(self.db)
         if offset_:
             stmt = stmt.offset(offset_)
@@ -174,8 +212,34 @@ class DAL:
                         stmt = stmt.where(real_attr >= v)
                     elif operator == 'lte':  # less than or equal to
                         stmt = stmt.where(real_attr <= v)
+                else:
+                    continue
             else:
-                stmt = stmt.where(attr == v)
+                if type(v) == list and len(v) > 1:
+                    clauses = []
+                    for u in v:
+                        # if u and hasattr(self.db, u):
+                        clauses.append(attr == u)
+                    if clauses and len(clauses) > 0:
+                        stmt = stmt.where(or_(*clauses))
+                else:
+                    stmt = stmt.where(attr == v)
+
+        if order_by_list and len(order_by_list):
+            stmt = self.__add_order_by(stmt, self.db, order_by_list)
+        r = await self.db_session.execute(stmt)
+        return r.scalars().all()
+
+    async def search(self, **conditions):
+        query = conditions.get('query')
+        real_time_start = getattr(self.db, 'real_time_start')
+        real_time_end = getattr(self.db, 'real_time_end')
+        is_delete = getattr(self.db, 'is_delete')
+        stmt = select(self.db).where(
+            real_time_start.between(query.real_time_start, query.real_time_end),
+            real_time_end.between(query.real_time_start, query.real_time_end),
+            is_delete != 1
+        ).limit(query.limit).offset(query.offset).order_by(getattr(self.db, 'real_time_start').asc())
         r = await self.db_session.execute(stmt)
         return r.scalars().all()
 
@@ -235,3 +299,11 @@ class ExecDAL:
     def get_by_all(self, **conditions):
         if self.db_exec:
             return self.db_exec.get_by_all(**conditions)
+
+    def search(self, **conditions):
+        if self.db_exec:
+            return self.db_exec.search(**conditions)
+
+    def buck_create(self, obj_list):
+        if self.db_exec:
+            return self.db_exec.buck_create(obj_list)

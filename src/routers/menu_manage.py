@@ -7,7 +7,7 @@
 
 
 from fastapi import APIRouter, Depends, Query
-from src.db.dals import ExecDAL
+from src.db.dals import ExecDAL, SortBy
 from src.utils.logger import logger, generate_mysql_log_data
 from src.utils.responses import resp_200, resp_404, resp_500, resp_403
 from src.utils.dependencies import DALGetter
@@ -43,10 +43,13 @@ async def list_menu_info(
         offset: int = Query(None)
 ):
     dal.setDb(MenuManage)
-    res = await dal.get_by_all(limit=limit, offset=offset, is_delete=RESERVE)
+
+    res = await dal.get_by_all(limit=limit, offset=offset,
+                               order_by_list=[SortBy('sort', False), SortBy('create_time', False)],
+                               is_delete=RESERVE)
     data = [MenuManageSchema.from_orm(ms) for ms in res]
-    if data is not None and len(data) > 0:
-        data.sort(key=lambda x: x.create_time, reverse=False)
+    # if data is not None and len(data) > 0:
+    #     #     data.sort(key=lambda x: x.create_time, reverse=False)
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="menu_manage",
                                              handle_user="", handle_params="",

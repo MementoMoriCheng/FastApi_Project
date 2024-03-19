@@ -89,3 +89,4 @@ class SortColumn(BaseModel):
 
 class SortColumnManage(BaseModel):
     columns: List[SortColumn]  # Union[List[SortColumn], None] = None  # List[SortColumn]
+    table_code: str = 'column_manage'

@@ -36,7 +36,8 @@ column_type = {
     "text": "Text",
     "bool": "Boolean",
     "varchar": "Varchar(32)",
-    "float": "Float"
+    "float": "Float",
+    "file": "Text"
 }
 
 

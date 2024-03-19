@@ -12,6 +12,7 @@ from . import sql_handle
 from . import sql_manage
 from . import flying_service
 from . import menu_manage
+from . import document
 
 api_router = APIRouter()
 api_router.include_router(column_manage.router, tags=['ColumnManage'], prefix='/column_manage')
@@ -20,3 +21,4 @@ api_router.include_router(sql_handle.router, tags=['SqlHandle'], prefix='/sql_ha
 api_router.include_router(sql_manage.router, tags=['SqlManage'], prefix='/sql_manage')
 api_router.include_router(flying_service.router, tags=['FlyingService'], prefix='/flying_service')
 api_router.include_router(menu_manage.router, tags=['MenuManage'], prefix='/menu_manage')
+api_router.include_router(document.router, tags=['Document'], prefix='/document')
