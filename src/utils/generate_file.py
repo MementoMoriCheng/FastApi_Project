@@ -9,6 +9,7 @@ import os
 import pandas as pd
 from fpdf import FPDF
 from openpyxl import Workbook
+import matplotlib.pyplot as plt
 
 
 def generate_excel(table_list, output_path=None, file_name=None):
@@ -88,3 +89,67 @@ def generate_pdf(table_list, output_path=None, file_name=None):
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     pdf.output(output_path)
+
+
+class Plotter:
+    def __init__(self, figure_size=(10, 6)):
+        self.figure_size = figure_size
+
+    @staticmethod
+    def configure_plot(title, x_label=None, y_label=None):
+        plt.title(title)
+        if x_label:
+            plt.xlabel(x_label)
+        if y_label:
+            plt.ylabel(y_label)
+        plt.tight_layout()
+
+    def create_line_plot(self, x_data, y_data, x_label='X-axis', y_label='Y-axis', title='Line Plot'):
+        plt.figure(figsize=self.figure_size)
+        plt.plot(x_data, y_data)
+        self.configure_plot(title, x_label, y_label)
+        plt.show()
+
+    def create_scatter_plot(self, x_data, y_data, x_label='X-axis', y_label='Y-axis', title='Scatter Plot'):
+        plt.figure(figsize=self.figure_size)
+        plt.scatter(x_data, y_data)
+        self.configure_plot(title, x_label, y_label)
+        plt.show()
+
+    def create_bar_chart(self, categories, values, x_label='Categories', y_label='Values', title='Bar Chart'):
+        plt.figure(figsize=self.figure_size)
+        plt.bar(categories, values)
+        plt.xticks(rotation=45)
+        self.configure_plot(title, x_label, y_label)
+        plt.show()
+
+    def create_pie_chart(self, sizes, labels, title='Pie Chart', autopct='%1.1f%%'):
+        plt.figure(figsize=self.figure_size)
+        plt.pie(sizes, labels=labels, autopct=autopct, startangle=90)
+        plt.axis('equal')
+        self.configure_plot(title)
+        plt.show()
+
+    def create_histogram(self, data, bins=10, x_label='Value Range', y_label='Frequency', title='Histogram'):
+        plt.figure(figsize=self.figure_size)
+        plt.hist(data, bins=bins, edgecolor='black')
+        self.configure_plot(title, x_label, y_label)
+        plt.show()
+
+
+plotter = Plotter()
+
+# 示例数据
+x = range(10)
+y = [i ** 2 for i in x]
+categories = ['A', 'B', 'C', 'D', 'E']
+values = [30, 25, 40, 35, 20]
+sizes = [30, 25, 40, 35]
+labels = ['Category A', 'Category B', 'Category C', 'Category D']
+
+# 使用示例
+# plotter.create_line_plot(x, y)
+# plotter.create_scatter_plot(x, y)
+# plotter.create_bar_chart(categories, values)
+# plotter.create_pie_chart(sizes, labels)
+# plotter.create_histogram(y)

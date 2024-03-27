@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/03/12
 # @Author  : MementoMori
-# @File    : column_manage.py
+# @File    : document.py
 # @Software: PyCharm
 import os
 import uuid
@@ -65,43 +65,19 @@ async def update_document(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: st
 
 
 @router.delete("/{id_}", tags=["Document"], summary="删掉文档", response_model=DeleteDocument)
-async def delete_document(
-        dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-        project_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-        *,
-        id_: str
-):
+async def delete_document(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, table_code: str, col_name: str):
     dal.setDb(Document)
     ms = await dal.get(id_)
     if not ms:
         return resp_404()
-    document_name = ms.name
-    document_type = document_name.split(".")[-1].lower()
-    document_uuid = ms.id
+    table_name = f"auto_{table_code}"
 
-    # update_conditions = {"id": id_}
-    # table_name = f"auto_{table_code}"
-    # updated_data =
-    # await sql_handle.update(table_name, update_conditions, updated_data)
-    # select_conditions = {"id": id_}
-    # table_name = f"auto_{res.code}"
+    conditions = {"id": id_}
+    file_object = await sql_handle.select(table_name, conditions=conditions, fields=[col_name])
+    file_object.remove(id_)
+    updated_data = {col_name: file_object}
+    await sql_handle.update(table_name, conditions, updated_data)
 
-    # project_dal.setDb(Project)
-    update_all_object = {}
-    if document_type in ("jpg", "jpeg", "png", "gif"):
-        all_project_object = await sql_handle.select({"key": "thumbnail", "value": document_uuid})
-        for row in all_project_object:
-            thumbnail_list = json.loads(row.thumbnail)
-            thumbnail_list.remove(id_)
-            update_all_object[row.id] = json.dumps(thumbnail_list)
-        await project_dal.update_buck_data(update_all_object, "thumbnail")
-    else:
-        all_project_object = await project_dal.query_array_contains({"key": "file_id", "value": document_uuid})
-        for row in all_project_object:
-            file_id_list = json.loads(row.file_id)
-            file_id_list.remove(id_)
-            update_all_object[row.id] = json.dumps(file_id_list)
-        await project_dal.update_buck_data(update_all_object, "file_id")
     await dal.delete(id_)
     return resp_200(data={'id': id_})
 

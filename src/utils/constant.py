@@ -11,6 +11,9 @@ FLIGHT_INTERVAL = 30
 DELETE = 1
 RESERVE = 0
 
+# 是否发布
+PUBLISHED = 1
+
 # 是否是父列
 FATHER = 1
 SON = 0

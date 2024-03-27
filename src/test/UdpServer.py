@@ -17,7 +17,11 @@ print(f"服务器正在监听 {SERVER_IP}:{SERVER_PORT}...")
 while True:
     # 接收数据 (数据和客户端地址)
     time.sleep(5)
-    data, client_address = server_socket.recvfrom(1024)
+    try:
+        data, client_address = server_socket.recvfrom(1024)
+    except ConnectionResetError as e:
+        # 记录错误日志
+        print(f"Connection with client at address {client_address} was reset by peer: {e}")
 
     print(f"收到数据来自 {client_address}: {data.decode('utf-8')}")
     src_path = "D:\\File\\dzm9b"

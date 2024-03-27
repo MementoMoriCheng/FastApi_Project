@@ -212,6 +212,9 @@ class DAL:
                         stmt = stmt.where(real_attr >= v)
                     elif operator == 'lte':  # less than or equal to
                         stmt = stmt.where(real_attr <= v)
+
+                    elif operator == "contains":
+                        stmt = stmt.where(real_attr.contains(f'%{v}%'))
                 else:
                     continue
             else:

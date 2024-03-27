@@ -2,19 +2,17 @@
 # -*- coding: utf-8 -*-
 # @Time    :
 # @Author  : MementoMori
-# @File    : Flying_manage.py
+# @File    : document.py
 # @Software: PyCharm
 from src.db.config import Base
 from sqlalchemy import Column, String, DateTime, func, Integer
+from src.utils import generate_uuid
 
 
 class Document(Base):
-    """
-    文档表
-    """
     __tablename__ = 'document'
 
-    id = Column(String(36), primary_key=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(255), comment="文档名称")
     url = Column(String(255), comment="文档存放路径")
     document_type = Column(String(32), comment="文档类型")

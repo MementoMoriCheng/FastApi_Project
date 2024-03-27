@@ -11,6 +11,7 @@ from sqlalchemy import Text, Integer, String, Boolean, DateTime, VARCHAR
 table_schema = {
     'id': String(36),
     'code': String(32),
+    'status': String(32),
     'description': Text,
     'create_user': String(64),
     'update_user': String(64),
@@ -26,7 +27,8 @@ column_schema = {
     "create_user": String(32),
     "primary": Boolean,
     "unique": Boolean,
-    "empty": Boolean
+    "empty": Boolean,
+    "is_encrypt": Boolean
 }
 
 column_type = {

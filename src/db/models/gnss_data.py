@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/1/29 15:21
 # @Author  : yilifeng
-# @File    : flying_service.py
+# @File    : gnss_data.py
 # @Software: PyCharm
 
 from src.db.config import Base

@@ -41,6 +41,7 @@ class ColumnManage(Base):
     empty = Column(Boolean, nullable=True, comment="是否可为空")
     primary = Column(Boolean, nullable=True, comment="是否为主键")
     unique = Column(Boolean, nullable=True, comment="是否唯一")
+    is_encrypt = Column(Boolean, nullable=True, comment="是否加密")
     association = Column(Text().with_variant(JSON, "mysql"), comment="定义关联字段，可定义多个，数组表示")
 
     description = Column(Text().with_variant(JSON, "mysql"), comment="字段描述")

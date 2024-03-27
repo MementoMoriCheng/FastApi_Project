@@ -66,7 +66,7 @@ def parse_gnss_data(data):
     (sync_code1, sync_code2, sync_code3, identify_code, gps_week, gps_milliseconds, latitude, longitude,
      altitude, latitude_stddev, longitude_stddev, altitude_stddev, horizon_speed, upward_speed, track_direction,
      positioning_status_satellite_count, solution_satellite_count, differential_age, azimuth, pitch, checksum) = (
-        struct.unpack('<bbbbhlddfffffffbbbffb', data))
+        struct.unpack('<BBBBHlddfffffffBBBffB', data))
 
     gps_epoch = datetime.datetime(1980, 1, 6)
     first_gps_week = 1024

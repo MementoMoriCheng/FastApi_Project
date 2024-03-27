@@ -11,7 +11,6 @@ from pydantic import BaseModel, constr
 class CreateDocument(BaseModel):
     id: str
     url: str
-
     name: str
     user_id: str
     document_type: str

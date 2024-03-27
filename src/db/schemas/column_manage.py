@@ -27,6 +27,7 @@ class CreateColumnManage(BaseModel):
     primary: bool = None
     unique: bool = None
     empty: bool = None
+    is_encrypt: bool = None
 
 
 class UpdateColumnManage(BaseModel):
@@ -38,6 +39,7 @@ class UpdateColumnManage(BaseModel):
     primary: bool = None
     unique: bool = None
     empty: bool = None
+    is_encrypt: bool = None
     association: List = []
     update_user: str = None
 
@@ -56,6 +58,7 @@ class ColumnManageSchema(BaseModel):
     empty: bool = None
     primary: bool = None
     unique: bool = None
+    is_encrypt: bool = None
     is_parent: bool = False
     parent: str = None
     status: int = None
@@ -77,6 +80,7 @@ class ColumnListSchema(BaseModel):
     parent: str = None
     status: int = None
     is_parent: bool = None
+    is_encrypt: bool = None
 
     class Config:
         orm_mode = True
