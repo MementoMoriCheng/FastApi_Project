@@ -23,6 +23,7 @@ from src.utils.ftp_util import FTPError
 from src.utils.udp_service import UDPService
 
 from src.utils.udp_service import u_s
+from src.utils.websocket_service import w_s
 
 
 def create_application() -> FastAPI:
@@ -108,6 +109,8 @@ def register_event(app):
         loop = asyncio.get_running_loop()
         await asyncio.create_task(u_s.start(loop))
         await asyncio.create_task(u_s.connect_to_remote_server(loop))
+
+        w_s.start_server()
 
     @app.on_event("shutdown")
     async def shutdown_event():

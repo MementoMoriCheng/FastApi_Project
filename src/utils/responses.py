@@ -4,11 +4,15 @@
 # @Author  : yilifeng
 # @File    : responses.py
 # @Software: PyCharm
+import datetime
 
+import jwt
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi import status
 import httpx
+
+from src.config.setting import settings
 
 
 class BusinessStatusCode:
@@ -80,10 +84,29 @@ def resp_500(msg="INTERNAL SERVER ERROR"):
     )
 
 
+def generate_service_token():
+    """
+    生成用于服务调用的 token
+    Returns:
+
+    """
+    now = datetime.datetime.utcnow()
+    exp_dt = now + datetime.timedelta(minutes=3)
+    payload = {
+        "exp": exp_dt,
+        "iat": now,  # 签发时间
+        "iss": "mvt",  # 签名
+        "app": settings.APP_NAME,
+    }
+    token = jwt.encode(payload, key=settings.SECRET_KEY, algorithm="HS256")
+    return token
+
+
 async def fetch_external_data(url: str, data):
     async with httpx.AsyncClient() as client:
         json_data = [item if isinstance(item, str) else item.dict() for item in data]
-        response = await client.post(url, json=json_data)
+        response = await client.post(url, headers={"Authorization": f"Bearer {generate_service_token()}"},
+                                     json=json_data)
         if response.status_code == 200:
             return response.json()
         else:

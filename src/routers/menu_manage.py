@@ -28,11 +28,6 @@ async def get_menu_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str)
     if not res:
         return resp_404()
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="menu_manage",
-                                             handle_user="", handle_params=id_,
-                                             entity_id=id_, handle_reason='通过id获取菜单的信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=MenuManageSchema.from_orm(res))
 
 
@@ -48,13 +43,6 @@ async def list_menu_info(
                                order_by_list=[SortBy('sort', False), SortBy('create_time', False)],
                                is_delete=RESERVE)
     data = [MenuManageSchema.from_orm(ms) for ms in res]
-    # if data is not None and len(data) > 0:
-    #     #     data.sort(key=lambda x: x.create_time, reverse=False)
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="menu_manage",
-                                             handle_user="", handle_params="",
-                                             entity_id="", handle_reason='获取所有菜单的信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data={"data": data, "total": len(res)})
 

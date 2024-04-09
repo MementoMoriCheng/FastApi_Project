@@ -1,7 +1,5 @@
-import copy
 import random
 import itertools
-from src.utils.constant import MOST_PLY
 from datetime import timedelta, time, datetime
 
 
@@ -23,16 +21,13 @@ def parse_input(obj_in):
     start_time_str = obj_in.get("start_time")
     end_time_str = obj_in.get("end_time")
     exclude_time_strs = obj_in.get("exclude_time")
-    flight_interval = obj_in.get("flight_interval")
-    status = obj_in.get("status")
+    flight_interval = obj_in.get("flight_interval", 30)
+    status = obj_in.get("status", 1)
     name = obj_in.get("name")
-    handle_user = obj_in.get("handle_user")
-    handle_reason = obj_in.get("handle_reason")
-    description = obj_in.get("description")
 
-    plane_most_ply = obj_in.get("plane_most_ply") if obj_in.get("plane_most_ply") else MOST_PLY
-    coach_most_ply = obj_in.get("coach_most_ply") if obj_in.get("coach_most_ply") else MOST_PLY
-    student_most_ply = obj_in.get("student_most_ply") if obj_in.get("student_most_ply") else MOST_PLY
+    plane_most_ply = obj_in.get("plane_most_ply", 5)
+    coach_most_ply = obj_in.get("coach_most_ply", 5)
+    student_most_ply = obj_in.get("student_most_ply", 5)
 
     exclude_time = [tuple(exclude_time_str) for exclude_time_str in exclude_time_strs]
 
@@ -46,9 +41,6 @@ def parse_input(obj_in):
         "exclude_time": exclude_time,
         "status": status,
         "name": name,
-        "handle_user": handle_user,
-        "handle_reason": handle_reason,
-        "description": description,
         "plane_most_ply": int(plane_most_ply),
         "coach_most_ply": int(coach_most_ply),
         "student_most_ply": int(student_most_ply),
@@ -123,37 +115,6 @@ def split_day_into_time_segments(start, end, exclusions):
 
 def str_to_datetime(time_str):
     return datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S')
-
-
-def check_time(is_exist_plan, start_time, end_time):
-    conflict = False
-    for plan in is_exist_plan:
-        conflict = is_overlapping(plan.real_time_start, plan.real_time_end, start_time, end_time)
-    return conflict
-
-
-def is_overlapping(start1, end1, start2, end2):
-    """
-    判断两个时间段是否有交集
-    Args:
-        start1: 第一段的开始时间
-        end1: 第一段的结束时间
-        start2: 第二段的开始时间
-        end2: 第二段的结束时间
-
-    Returns:
-        如果有交集返回True，否则返回False
-    """
-    if isinstance(start1, str):
-        start1 = datetime.strptime(start1, '%Y-%m-%d %H:%M:%S')
-    if isinstance(end1, str):
-        end1 = datetime.strptime(end1, '%Y-%m-%d %H:%M:%S')
-    if isinstance(start2, str):
-        start2 = datetime.strptime(start2, '%Y-%m-%d %H:%M:%S')
-    if isinstance(end2, str):
-        end2 = datetime.strptime(end2, '%Y-%m-%d %H:%M:%S')
-
-    return (start1 < end2 and end1 > start2) or (start2 < end1 and end2 > start1)
 
 
 def merge_overlapping_segments(segments):
@@ -275,11 +236,12 @@ def allocate_source(input_data):
     assignments = []
     unassigned_students = available_students.copy()
 
-    for idx, student in enumerate(available_students):
+    for student in available_students:
         if student_usage_count[student] == student_most_ply:
             continue
         try:
-            coach, aircraft = available_coaches[idx], available_aircrafts[idx]
+            coach, aircraft = next(
+                itertools.zip_longest(itertools.cycle(available_coaches), itertools.cycle(available_aircrafts)))
 
             if coach_usage_count[coach] < coach_most_ply and aircraft_usage_count[aircraft] < plane_most_ply:
                 assignments.append((student, coach, aircraft))
@@ -287,12 +249,20 @@ def allocate_source(input_data):
                 coach_usage_count[coach] += 1
                 aircraft_usage_count[aircraft] += 1
                 student_usage_count[student] += 1
+
                 unassigned_students.remove(student)
+
+                # 移除已达到使用限制的资源
+                if aircraft_usage_count[aircraft] == plane_most_ply:
+                    available_aircrafts.remove(aircraft)
+                if coach_usage_count[coach] == coach_most_ply:
+                    available_coaches.remove(coach)
+
             else:
                 continue
-        except IndexError:
+        except StopIteration:
             break
-    return assignments
+    return assignments[:1] if len(students) == 1 else assignments
 
 
 def gen_auto_maintenance_period(start_time, end_time, plan_duration, exclusions, break_time=30):
@@ -347,32 +317,42 @@ def gen_maintenance_period(start_time, end_time, plan_duration, break_time):
     return break_time_slots
 
 
-def gen_cartesian_product(routes, students, teachers, planes):
+def is_overlapping(start1, end1, start2, end2):
     """
-    资源全排列
+    判断两个时间段是否有交集
     Args:
-        routes:
-        students:
-        teachers:
-        planes:
+        start1: 第一段的开始时间
+        end1: 第一段的结束时间
+        start2: 第二段的开始时间
+        end2: 第二段的结束时间
 
     Returns:
-
+        如果有交集返回True，否则返回False
     """
-    from collections import defaultdict
-    cartesian = defaultdict(lambda: [])
-    combinations = list(itertools.product(routes, students, teachers, planes))
-    for combo in combinations:
-        cartesian[combo[0]].append(combo[1:])
-    return cartesian
+    if isinstance(start1, str):
+        start1 = datetime.strptime(start1, '%Y-%m-%d %H:%M:%S')
+    if isinstance(end1, str):
+        end1 = datetime.strptime(end1, '%Y-%m-%d %H:%M:%S')
+    if isinstance(start2, str):
+        start2 = datetime.strptime(start2, '%Y-%m-%d %H:%M:%S')
+    if isinstance(end2, str):
+        end2 = datetime.strptime(end2, '%Y-%m-%d %H:%M:%S')
+
+    return (start1 < end2 and end1 > start2) or (start2 < end1 and end2 > start1)
 
 
-def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_time, student_time, auto_gen=False):
+def check_time(is_exist_plan, start_time, end_time):
+    conflict = False
+    for plan in is_exist_plan:
+        conflict = is_overlapping(plan.real_time_start, plan.real_time_end, start_time, end_time)
+    return conflict
+
+
+def gen_schedule(input_data, maintenance_period, coach_time, route_time, student_time, auto_gen=False):
     """
     生成计划
     Args:
         input_data:
-        expand_data:
         maintenance_period:
         coach_time:
         route_time:
@@ -391,8 +371,6 @@ def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_
     status = input_info.get("status")
     name = input_info.get("name")
     description = input_info.get("description")
-    handle_user = input_info.get("handle_user")
-    handle_reason = input_info.get("handle_reason")
     flight_route = input_info.get("fly_route_infos")
 
     def gen_time_period(available_src, flight_interval=0):
@@ -420,7 +398,8 @@ def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_
         final_time = split_time_segments(con[0], con[1], plan_duration)
         final_times.extend(final_time)
 
-    for idx, assignment in enumerate(assignments):
+    chosen_final_assignments = random.sample(assignments, len(assignments))
+    for idx, assignment in enumerate(chosen_final_assignments):
         if not final_times:
             print("无法安排")
             continue
@@ -435,8 +414,6 @@ def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_
                          "plan_time_end": "",
                          "real_time_start": "",
                          "real_time_end": "",
-                         "handle_user": handle_user,
-                         "handle_reason": handle_reason,
                          "status": status,
                          "name": name if name else f"auto_plan_{assignment[0]}",
                          "description": description,
@@ -444,7 +421,7 @@ def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_
                          }
         schedule_info.update(plan_time_start=final_times[idx][0], plan_time_end=final_times[idx][1],
                              real_time_start=final_times[idx][0], real_time_end=final_times[idx][1],
-                             expand_data=expand_data)
+                             expand_data=input_data)
         schedule_info_list.append(schedule_info)
     return schedule_info_list
 
@@ -538,20 +515,19 @@ obj_in3 = {'fly_route': {'table': 'fly_route', 'id': '1', 'value': 60},
            "coach_most_ply": 3,
            "student_most_ply": 5,
            'exclude_time': [['2024-02-06 12:00:00', '2024-02-06 14:00:00']]}
-
 # print(parse_input(obj_in))
 # gen_schedule(obj_in)
 # print(allocate_available_source(obj_in))
 # aa = gen_schedule(obj_in2, [], [], [], [], True)
-aa = allocate_source(obj_in2)
-print("aa_plan: ", aa)
-# start1 = '2022-01-01 10:00:00'
-# end1 = '2022-01-01 12:00:00'
-# start2 = '2022-01-01 12:30:00'
-# end2 = '2022-01-01 13:00:00'
-# # plan =
-# # print(is_overlapping(start1, end1, start2, end2))  # 输出：True
-# # print(check_time(, start2, end2))  # 输出：True
-# dt_obj = datetime.strptime(start1, '%Y-%m-%d')
-# print(type(dt_obj))
-# print(dt_obj)
+# aa = allocate_source(obj_in3)
+# print("aa_plan: ", aa)
+start1 = '2022-01-01 10:00:00'
+end1 = '2022-01-01 12:00:00'
+start2 = '2022-01-01 12:30:00'
+end2 = '2022-01-01 13:00:00'
+# plan =
+# print(is_overlapping(start1, end1, start2, end2))  # 输出：True
+# print(check_time(, start2, end2))  # 输出：True
+dt_obj = datetime.strptime(start1, '%Y-%m-%d')
+print(type(dt_obj))
+print(dt_obj)

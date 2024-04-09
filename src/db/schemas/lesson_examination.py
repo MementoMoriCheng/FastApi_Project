@@ -237,3 +237,93 @@ class UpdateQuestionSchema(BaseModel):
     status: int = 0
     updated_user: str = None
     updated_at: Union[datetime, None]
+
+
+# -----------课程表信息
+class SearchScheduleSchema(BaseModel):
+    course_name: str = None
+    classroom: str = None
+    teacher: str = None
+    classes: str = None
+    is_delete: int = None
+    status: int = None
+
+
+class ScheduleSchema(BaseModel):
+    id: str
+    course_date: Union[datetime, None]
+    time_periods: Union[datetime, None]
+    classroom: str = None
+    course_name: str = None
+    teacher: str = None
+    classes: str = None
+    students_num: int = 0
+
+    is_delete: int = 0
+    status: int = 0
+    notes: Text = None
+    created_at: Union[datetime, None]
+    updated_at: Union[datetime, None]
+
+    class Config:
+        orm_mode = True
+
+
+class UpdateScheduleSchema(BaseModel):
+    course_date: Union[datetime, None]
+    time_periods: Union[datetime, None]
+    classroom: str = None
+    course_name: str = None
+    teacher: str = None
+    classes: str = None
+    students_num: int = 0
+
+    is_delete: int = 0
+    status: int = 0
+    notes: Text = None
+    updated_at: Union[datetime, None]
+
+
+# -----------教学日志信息
+class SearchTeachingJournalSchema(BaseModel):
+    course_name: str = None
+    classroom: str = None
+    teacher: str = None
+    course_content: Text = None
+    is_delete: int = None
+    status: int = None
+
+
+class TeachingJournalSchema(BaseModel):
+    id: str
+    course_date: Union[datetime, None]
+    time_periods: Union[datetime, None]
+    classroom: str = None
+    course_name: str = None
+    teacher: str = None
+    course_content: Text = None
+    students_num: int = 0
+
+    is_delete: int = 0
+    status: int = 0
+    notes: Text = None
+    created_at: Union[datetime, None]
+    updated_at: Union[datetime, None]
+
+    class Config:
+        orm_mode = True
+
+
+class UpdateTeachingJournalSchema(BaseModel):
+    course_date: Union[datetime, None]
+    time_periods: Union[datetime, None]
+    classroom: str = None
+    course_name: str = None
+    teacher: str = None
+    classes: str = None
+    students_num: int = 0
+
+    is_delete: int = 0
+    status: int = 0
+    notes: Text = None
+    updated_at: Union[datetime, None]

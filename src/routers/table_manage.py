@@ -27,11 +27,6 @@ async def get_table_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str
     if not res:
         return resp_404()
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="table_manage",
-                                             handle_user="", handle_params=id_,
-                                             entity_id=id_, handle_reason='通过id获取表的信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=TableManageSchema.from_orm(res))
 
 
@@ -39,17 +34,11 @@ async def get_table_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str
 async def list_table_info(
         dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
         limit: int = Query(None),
-        offset: int = Query(None)
-):
+        offset: int = Query(None)):
     dal.setDb(TableManage)
     res = await dal.get_by_all(limit=limit, offset=offset, is_delete=RESERVE)
     data = [TableManageSchema.from_orm(ms) for ms in res]
     sorted_data = sorted(data, key=lambda x: x.create_time, reverse=True)
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="table_manage",
-                                             handle_user="", handle_params="",
-                                             entity_id="", handle_reason='获取所有表的信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data={"data": sorted_data, "total": len(res)})
 

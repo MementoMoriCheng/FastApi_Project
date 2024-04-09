@@ -1,3 +1,4 @@
+import copy
 import re
 import struct
 from pprint import pprint
@@ -27,6 +28,8 @@ total_substrings = len(binary_content) // 66
 
 # 分割出所有子串
 split_strings = [binary_content[i * 66:(i + 1) * 66] for i in range(total_substrings)]
+
+
 # pprint(split_strings)
 
 
@@ -56,11 +59,40 @@ def parse_gnss_data(data):
     print("Pitch: ", pitch)
     print("Checksum: ", checksum)
 
-print(total_substrings)
-target_byte = split_strings[301]
-parse_gnss_data(target_byte)
+
+# print(total_substrings)
+# target_byte = split_strings[301]
+# parse_gnss_data(target_byte)
 # for target_byte in target_bytes:
 #     parse_gnss_data(target_byte)
 
-a = [90 for _ in range(5)]
-print(a)
+# a = [90 for _ in range(5)]
+# print(a)
+# from src.utils.constant import ROLE_INFO
+# table_list = [
+#     {"name": "Flight1"},
+#     {"name": "Flight2"},
+#     {"name": "Flight3"}
+# ]
+# role_list = []
+# for role in table_list:
+#     # print(ROLE_INFO.update(slug="", name=role.get("name"), status=1))
+#     ROLE_INFO.update(slug="", name=role.get("name"), status=1)
+#     role_list.append(copy.copy(ROLE_INFO))
+#
+# print(role_list)
+
+
+list_a = ['xiaohua', 'haha', 'dada', 'aa', 'a']
+list_b = ['xiaohua', 'haha', 'dada', 'aa']
+
+# 转换为集合以找到差集
+diff_set = set(list_a) - set(list_b)
+# print(diff_set)
+if diff_set:
+    print(f"Differential:{diff_set}")
+else:
+    print("No Differential")
+# 将差集转换回列表形式
+# diff_list = list(diff_set)
+# print(diff_list)

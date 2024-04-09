@@ -42,11 +42,6 @@ async def get_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     if not data_info:
         return resp_404(msg="未能获取到表信息")
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type=code,
-                                             handle_user="", handle_params={"id": id_, "table_code": code},
-                                             entity_id=id_, handle_reason='通过表名和数据id获取数据详细信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=data_info)
 
 
@@ -71,11 +66,6 @@ async def list_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     table_list = await sql_handle.select(table_name, fields=fields_data, limit=limit, offset=offset)
     if not table_list:
         table_list = []
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type=code,
-                                             handle_user="", handle_params={"table_code": code},
-                                             entity_id=res.id, handle_reason='通过表名获取所有数据')
-    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data={"data": table_list, "total": len(table_list)})
 
@@ -122,11 +112,6 @@ async def list_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                                          offset=offset)
     if not table_list:
         table_list = []
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type=code,
-                                             handle_user="", handle_params=column_info,
-                                             entity_id=res.id, handle_reason='通过表名获取所有数据')
-    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data={"data": table_list, "total": len(table_list)})
 
@@ -221,15 +206,17 @@ async def get_column_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, cod
 #     return resp_200(data={"data": table_list, "total": len(table_list)})
 
 
-@router.post('sync_user/', tags=['SqlHandle'], summary="同步用户到管理系统")
-async def list_data(*, payload: List[UserSyncIn]):
+@router.post('/sync_user/', tags=['SqlHandle'], summary="同步用户到管理系统")
+async def sync_user(*, payload: List[UserSyncIn]):
     url = settings.SYNC_USER_URL
     response_result = await fetch_external_data(url, payload)
+    logger.info(f"同步用户到管理系统:{payload}")
     return response_result
 
 
-@router.post('unsync_user/', tags=['SqlHandle'], summary="取消同步用户到管理系统")
-async def list_data(*, usernames: List[str]):
+@router.post('/unsync_user/', tags=['SqlHandle'], summary="取消同步用户到管理系统")
+async def unsync_user(*, usernames: List[str]):
     url = settings.UNSYNC_USER_URL
     response_result = await fetch_external_data(url, usernames)
+    logger.info(f"取消同步用户到管理系统:{usernames}")
     return response_result

@@ -25,7 +25,7 @@ class SortBy:
 
     def __init__(self, sort: str, desc: bool):
         self.sort_by = sort
-        self.desc = desc
+        self.is_desc = desc
 
 
 class DAL:
@@ -34,17 +34,16 @@ class DAL:
         self.db_session = db_session
 
     def __add_order_by(self, stmt: object, db: object, order_by_list: List[SortBy] = None) -> object:
-        if order_by_list and len(order_by_list):
-            for sort in order_by_list:
-                is_desc = sort.is_desc
-                key = sort.sort_by
-                if hasattr(db, key):
-                    order_by = getattr(db, sort.sort_by)
-                    if order_by:
-                        if is_desc:
-                            stmt = stmt.order_by(order_by.desc())
-                        else:
-                            stmt = stmt.order_by(order_by.asc())
+        for sort in order_by_list:
+            is_desc = sort.is_desc
+            key = sort.sort_by
+            if hasattr(db, key):
+                order_by = getattr(db, sort.sort_by)
+                if order_by:
+                    if is_desc:
+                        stmt = stmt.order_by(order_by.desc())
+                    else:
+                        stmt = stmt.order_by(order_by.asc())
         return stmt
 
     async def get(self, id_=None):
@@ -192,12 +191,12 @@ class DAL:
         r = await self.db_session.execute(stmt)
         return r.scalars().first()
 
-    async def get_by_all(self, limit_=None, offset_=None, order_by_list: List[SortBy] = None, **conditions):
+    async def get_by_all(self, limit=None, offset=None, order_by_list: List[SortBy] = None, **conditions):
         stmt = select(self.db)
-        if offset_:
-            stmt = stmt.offset(offset_)
-        if limit_:
-            stmt = stmt.limit(limit_)
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit:
+            stmt = stmt.limit(limit)
         for k, v in conditions.items():
             attr = getattr(self.db, k, None)
             if not attr:

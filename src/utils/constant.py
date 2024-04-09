@@ -31,6 +31,26 @@ class RecordsStatusCode:
     ERROR = 3
 
 
+class QuestionLevel:
+    """题型难度"""
+
+    Introductory = 1
+    Basic = 2
+    Intermediate = 3
+    Advanced = 4
+    Expert = 5
+
+
+class QuestionType:
+    """题型类型"""
+
+    SingleChoice = 1
+    MultipleChoice = 2
+    Fill = 3
+    Judge = 4
+    ShortAnswer = 5
+
+
 # 数据库记录日志格式
 LOG_RECORDS = {
     'id': "主键，一般为uuid",

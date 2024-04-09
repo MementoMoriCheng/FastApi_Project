@@ -5,8 +5,9 @@
 # @File    : sql_handle.py
 # @Software: PyCharm
 import asyncio
+import random
 import traceback
-from src.config.setting import settings
+# from src.config.setting import settings
 from sqlalchemy.exc import SQLAlchemyError
 from src.db.config import session
 from src.utils.logger import logger
@@ -15,7 +16,9 @@ from sqlalchemy import (Column, Integer, String, Date, MetaData, Table, text,
                         PrimaryKeyConstraint, create_engine, and_, select)
 from sqlalchemy.orm import sessionmaker
 
-database_uri = f"{settings.DATABASE_URI}/{settings.DB_NAME}"
+# database_uri = f"{settings.DATABASE_URI}/{settings.DB_NAME}"
+# database_uri = "mysql+pymysql://root:123456@localhost:3306/flyingTrainingDB"
+database_uri = "mysql+pymysql://root:123456@localhost:3306/flight_test"
 metadata = MetaData()
 
 
@@ -139,7 +142,7 @@ class SqlHandle(object):
                     condition_clauses = []
                     for k, v in conditions.items():
                         if isinstance(v, dict):  # 处理包含操作符的对象
-                            operator = v["operator"]
+                            operator = v["value"]
                             operand = v.get("operand")
                             condition_clauses.append(self._process_condition(getattr(table.c, k), operator, operand))
                         else:  # 默认为等于操作
@@ -358,7 +361,7 @@ if __name__ == "__main__":
     #                           )
     # 查询 "airforce" 表中的记录
     # select_conditions = {"id": 1}
-    # selected_records = sql_handle.select("table_manage")
+    # # selected_records = sql_handle.select("table_manage")
     # selected_records = asyncio.run(sql_handle.select("table_manage"))
     # print(selected_records)
 
@@ -374,12 +377,85 @@ if __name__ == "__main__":
     # delete_conditions = {"item": "newuser"}
     # asyncio.run(sql_handle.delete("airforce", delete_conditions))
     from pprint import pprint
-    conditions = {
-        "plane_id": {"operator": "not_endWith", "operand": "1"},
-        "status": {"operator": "equal", "operand": 1},
-        "name": {"operator": "isEmpty", "operand": None}
-    }
+    #
+    # conditions = {
+    #     "username": "李狗蛋111",
+    #     "password": "123456111",
+    #     "role_id": "aef8ea2d-c768-48d5-905e-2997de8ec35f",
+    #     "system_id": [
+    #         "admin-sys111"
+    #     ]
+    # }
     # conditions = {"id": "1c9d2da3-6ca0-464d-a8fe-affae6473c3e"}
-    data = asyncio.run(sql_handle.select("flying_service", conditions=conditions))
-    pprint(data)
-    print(len(data))
+    # data = asyncio.run(sql_handle.insert("users", conditions))
+    # pprint(data)
+    from src.utils import generate_uuid
+    from datetime import datetime
+    import json
+
+    # conditions = {
+    #     "id": "",
+    #     "lesson_name": "软考",
+    #     "lesson_chapter": "软考",
+    #     "knowledge_points": "string",
+    #     "question": "string",
+    #     "analysis": "string",
+    #     "level_choices": random.randint(1, 5),
+    #     "options": "string",
+    #     "right_answer": "string",
+    #     "score": random.choice([2, 5, 10]),
+    #     "type": random.randint(1, 5),
+    #     "is_delete": 0,
+    #     "status": 0,
+    #     "created_user": "sysadmin",
+    #     "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    # }
+    # src_path = "D:\\File\\questions.txt"
+    # q_list = []
+    # with open(src_path, "r", encoding='utf-8') as f:
+    #     binary_content = f.read().split('\n')
+    #     for con in binary_content:
+    #         if con:
+    #             q = con.split('##')
+    #             conditions.update(id=generate_uuid(), question=q[0], analysis=q[3], options=q[1], right_answer=q[2])
+    #             asyncio.run(sql_handle.insert("questions", conditions))
+    #             q_list.append(copy.copy(conditions))
+    # pprint(q_list)
+
+    src_path = "D:\\File\\Variflight_CZ3655_20240409.json"
+    with open(src_path, "r") as file:
+        data = json.load(file)
+
+    gnss_data = {
+        'id': '',
+        'sync_code1': [0],
+        'sync_code2': [1],
+        'sync_code3': [2],
+        'identify_code': [3],
+        'gps_week': [4],
+        'gps_milliseconds': [5],
+        'latitude': [6],
+        'longitude': [7],
+        'altitude': [8],
+        'latitude_stddev': [9],
+        'longitude_stddev': [10],
+        'altitude_stddev': [11],
+        'horizon_speed': [12],
+        'upward_speed': [13],
+        'track_direction': [14],
+        'positioning_status_satellite_count': [15],
+        'solution_satellite_count': [16],
+        'differential_age': [17],
+        'azimuth': [18],
+        'pitch': [19],
+        'checksum': [20],
+        'is_delete': 0,
+        'create_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+    for con in data:
+        gnss_data.update(id=generate_uuid(), identify_code=int(con['fnum']), latitude=con['latitude'], longitude=con['longitude'],
+                         azimuth=con['angle'], altitude=con['height'], horizon_speed=con['speed'])
+        # print(con)
+        # print(gnss_data)
+        asyncio.run(sql_handle.insert("gnss_data", gnss_data))

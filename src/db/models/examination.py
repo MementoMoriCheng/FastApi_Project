@@ -21,6 +21,7 @@ class Examination(Base):
     start_time = Column(DateTime, comment="考试开始时间")
     end_time = Column(DateTime, comment="考试结束时间")
     major = Column(String(32), comment="专业课")
+    classes = Column(String(32), comment="班级")
     tips = Column(String(32), comment="考生须知")
 
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)

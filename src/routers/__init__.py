@@ -16,6 +16,7 @@ from . import document
 from . import teaching_resources_manage
 from . import exam_manage
 from . import log_manage
+from . import flight_safety_monitoring
 
 api_router = APIRouter()
 api_router.include_router(column_manage.router, tags=['ColumnManage'], prefix='/column_manage')
@@ -29,3 +30,4 @@ api_router.include_router(teaching_resources_manage.router, tags=['TeachingResou
                           prefix='/teaching_resources_manage')
 api_router.include_router(exam_manage.router, tags=['ExaminationManage'], prefix='/exam_manage')
 api_router.include_router(log_manage.router, tags=['LogManage'], prefix='/log_manage')
+api_router.include_router(log_manage.router, tags=['FlightSafetyMonitoring'], prefix='/flight_safety_monitoring')

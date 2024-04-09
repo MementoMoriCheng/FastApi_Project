@@ -2,14 +2,49 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/03/15
 # @Author  : MementoMori
-# @File    : sql_handle.py
+# @File    : generate_file.py
 # @Software: PyCharm
 
 import os
+import random
+from pprint import pprint
 import pandas as pd
 from fpdf import FPDF
 from openpyxl import Workbook
 import matplotlib.pyplot as plt
+from src.utils.constant import QuestionType, QuestionLevel
+import xml.etree.ElementTree as ET
+
+
+def generate_xml_from_query(results, table_name):
+    """
+
+    Args:
+        results:
+        table_name:
+
+    Returns:
+
+    """
+    # 假设results是从数据库查询得到的一个二维列表，每行代表一条记录，每列对应一个字段
+    root = ET.Element("root")
+
+    for row in results:
+        record = ET.SubElement(root, "record")
+
+        for i, field_value in enumerate(row):
+            # 假设你已经有了字段名的列表（这里简化假设它们与顺序一致）
+            field_name = "field{}".format(i + 1)  # 替换为实际的字段名
+            field_element = ET.SubElement(record, field_name)
+            field_element.text = str(field_value)
+
+    # 将XML树转换为字符串
+    xml_data = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
+    # 写入到文件（可选）
+    with open(f"{table_name}.xml", "w") as xml_file:
+        xml_file.write(xml_data)
+
+    return xml_data
 
 
 def generate_excel(table_list, output_path=None, file_name=None):
@@ -137,19 +172,113 @@ class Plotter:
         plt.show()
 
 
-plotter = Plotter()
+from src.utils.sql_config import sql_handle
 
-# 示例数据
-x = range(10)
-y = [i ** 2 for i in x]
-categories = ['A', 'B', 'C', 'D', 'E']
-values = [30, 25, 40, 35, 20]
-sizes = [30, 25, 40, 35]
-labels = ['Category A', 'Category B', 'Category C', 'Category D']
 
-# 使用示例
-# plotter.create_line_plot(x, y)
-# plotter.create_scatter_plot(x, y)
-# plotter.create_bar_chart(categories, values)
-# plotter.create_pie_chart(sizes, labels)
-# plotter.create_histogram(y)
+class Question:
+    def __init__(self, id, question_text, options, answer):
+        self.id = id
+        self.question_text = question_text
+        self.options = options
+        self.answer = answer
+
+
+class ExamPaperGenerator:
+    def __init__(self, table_name, single_choice=10, multiple_choice=5, fill=4, judge=5, short_answer=5):
+        self.table_name = table_name
+        self.single_choice = single_choice
+        self.multiple_choice = multiple_choice
+        self.fill = fill
+        self.judge = judge
+        self.short_answer = short_answer
+
+    def load_single_choice_bank(self):
+        single_choices = self.load_question_bank(QuestionType.SingleChoice)
+        # question_bank = []
+        # for row in rows:
+
+        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
+        #     options = [option_a, option_b, option_c, option_d]
+        #     question = Question(id, question_text, options, answer)
+        #     question_bank.append(question)
+        # return question_bank
+
+    def load_multiple_choice_bank(self):
+        multiple_choices = self.load_question_bank(QuestionType.MultipleChoice)
+        # question_bank = []
+        # for row in rows:
+        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
+        #     options = [option_a, option_b, option_c, option_d]
+        #     question = Question(id, question_text, options, answer)
+        #     question_bank.append(question)
+        # return question_bank
+
+    def load_fill_choice_bank(self):
+        fill = self.load_question_bank(QuestionType.Fill)
+        # question_bank = []
+        # for row in rows:
+        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
+        #     options = [option_a, option_b, option_c, option_d]
+        #     question = Question(id, question_text, options, answer)
+        #     question_bank.append(question)
+        # return question_bank
+
+    def load_judge_bank(self):
+        judge = self.load_question_bank(QuestionType.Judge)
+        # question_bank = []
+        # for row in rows:
+        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
+        #     options = [option_a, option_b, option_c, option_d]
+        #     question = Question(id, question_text, options, answer)
+        #     question_bank.append(question)
+        # return question_bank
+
+    def load_short_answer_bank(self):
+        short_answer = self.load_question_bank(QuestionType.ShortAnswer)
+        # question_bank = []
+        # for row in rows:
+        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
+        #     options = [option_a, option_b, option_c, option_d]
+        #     question = Question(id, question_text, options, answer)
+        #     question_bank.append(question)
+        # return question_bank
+
+    async def load_question_bank(self, question_type, is_desc=True, limit=100):
+        # desc 降序
+        question_bank = await sql_handle.select(self.table_name, conditions={"type": question_type},
+                                                order_by={"update_time": is_desc}, limit=limit)
+        return question_bank
+
+    def generate_exam(self, num_questions):
+        question_bank = self.load_question_bank()
+        random.shuffle(question_bank)
+        return question_bank[:num_questions]
+
+    def print_exam(self, exam):
+        for i, question in enumerate(exam, start=1):
+            print(f"Question {i}: {question.question_text}")
+            for j, option in enumerate(question.options, start=1):
+                print(f"{chr(65 + j - 1)}. {option}")
+            print("\n")
+
+
+if __name__ == '__main__':
+    # plotter = Plotter()
+    # # 示例数据
+    # x = range(10)
+    # y = [i ** 2 for i in x]
+    # categories = ['A', 'B', 'C', 'D', 'E']
+    # values = [30, 25, 40, 35, 20]
+    # sizes = [30, 25, 40, 35]
+    # labels = ['Category A', 'Category B', 'Category C', 'Category D']
+
+    # 使用示例
+    # plotter.create_line_plot(x, y)
+    # plotter.create_scatter_plot(x, y)
+    # plotter.create_bar_chart(categories, values)
+    # plotter.create_pie_chart(sizes, labels)
+    # plotter.create_histogram(y)
+    import asyncio
+
+    eg = ExamPaperGenerator("questions")
+    asyncio.run(eg.load_question_bank(1, False))

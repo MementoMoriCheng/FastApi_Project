@@ -31,11 +31,6 @@ async def get_flying_service_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
         return resp_404()
     data = FlyingPlanSchema.from_orm(res)
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
-                                             handle_user="", handle_params=id_,
-                                             entity_id=id_, handle_reason='通过id获取飞行计划的信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=data)
 
 
@@ -48,11 +43,6 @@ async def list_flying_service_info(
 
     res = await dal.search(query=input_data)
     data = [FlyingPlanSchema.from_orm(ms) for ms in res]
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
-                                             handle_user="", handle_params="",
-                                             entity_id="", handle_reason='获取所有飞行计划的信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data={"data": data, "total": len(res)})
 

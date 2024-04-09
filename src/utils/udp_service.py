@@ -8,7 +8,8 @@
 import os
 import shutil
 import asyncio
-from .logger import logger
+import websockets
+from src.utils.logger import logger
 from src.config.setting import settings
 from src.utils.sql_config import sql_handle
 from src.utils.ftp_util import RemoteFTPService
@@ -92,10 +93,6 @@ class UDPService:
         self.tasks.append(remote_connection_task)  # 将新创建的任务添加到任务列表
 
     async def _async_connect_to_remote_server(self, remote_address):
-        receiver_transport, _ = await self.loop.create_datagram_endpoint(
-            lambda: self.udp_protocol,
-            remote_addr=remote_address
-        )
         self.transport.sendto(b'Some request message', remote_address)
 
     @staticmethod
@@ -122,33 +119,33 @@ class UDPService:
 
             gnss_data = generate_mysql_gnss_data(parsed_gnss_data)
             await sql_handle.add_records("gnss_data", gnss_data)
-
-            # TODO 文件名要按指定格式？
-            from datetime import datetime
-            time_ = datetime.now().strftime('%Y%m%d%H%M%S')
-            file_name = f'{time_}-{identify_code}-{time_str}'
-            local_file_path = os.path.join(local_path, f"{file_name}")
-            with open(local_file_path, 'wb') as file:
-                file.write(data)
-            logger.warning(f'UDP Server Received Data,{file_name}')
-            ftp_util = RemoteFTPService()
-            if ftp_util and ftp_util.login:
-                try:
-                    encrypted_data = await ftp_util.encrypt_file(local_file_path)
-                    with open(local_file_path, "wb") as f:
-                        f.write(encrypted_data)
-                    remote_dir = os.path.join(settings.FTP_REMOTE_PATH, "gnss_data")
-                    await ftp_util.create_ftp_directory([remote_dir])
-                    remote_file_path = remote_dir + "/" + file_name
-                    ftp_file = open(local_file_path, "rb")
-                    await ftp_util.upload_encrypted_data_to_ftp(ftp_file, remote_file_path)
-                    ftp_file.close()
-                except IOError as ftp_err:
-                    logger.error(ftp_err)
-                    raise ftp_err
-                finally:
-                    ftp_util.remote_ftp_close()
-            shutil.rmtree(local_path)
+        #
+        #     # TODO 文件名要按指定格式？
+        #     from datetime import datetime
+        #     time_ = datetime.now().strftime('%Y%m%d%H%M%S')
+        #     file_name = f'{time_}-{identify_code}-{time_str}'
+        #     local_file_path = os.path.join(local_path, f"{file_name}")
+        #     with open(local_file_path, 'wb') as file:
+        #         file.write(data)
+        #     logger.warning(f'UDP Server Received Data,{file_name}')
+        #     ftp_util = RemoteFTPService()
+        #     if ftp_util and ftp_util.login:
+        #         try:
+        #             encrypted_data = await ftp_util.encrypt_file(local_file_path)
+        #             with open(local_file_path, "wb") as f:
+        #                 f.write(encrypted_data),
+        #             remote_dir = os.path.join(settings.FTP_REMOTE_PATH, "gnss_data")
+        #             await ftp_util.create_ftp_directory([remote_dir])
+        #             remote_file_path = remote_dir + "/" + file_name
+        #             ftp_file = open(local_file_path, "rb")
+        #             await ftp_util.upload_encrypted_data_to_ftp(ftp_file, remote_file_path)
+        #             ftp_file.close()
+        #         except IOError as ftp_err:
+        #             logger.error(ftp_err)
+        #             raise ftp_err
+        #         finally:
+        #             ftp_util.remote_ftp_close()
+        #     shutil.rmtree(local_path)
         except Exception as error:
             logger.error(error)
             return

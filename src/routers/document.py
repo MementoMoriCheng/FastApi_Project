@@ -131,8 +131,7 @@ async def upload_files_to_ftp(
                     document_objs.append(
                         BuckCreateDocument(
                             **{"id": new_file_name, "name": filename, "user_id": user_id, "url": remote_file_path,
-                               "document_type": extension})
-                    )
+                               "document_type": extension}))
                 else:
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     ext = filename.split(".")[-1]

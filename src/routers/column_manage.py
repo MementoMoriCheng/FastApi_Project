@@ -12,7 +12,6 @@ from src.utils.responses import resp_200, resp_404, resp_500, resp_406
 from fastapi import APIRouter, Depends
 from src.utils.dependencies import DALGetter
 from src.utils.sql_config import sql_handle
-from src.utils.responses import BusinessStatusCode
 from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
 from src.db.schemas.column_manage import (
     CreateColumnManage, ColumnManageSchema, UpdateColumnManage, ColumnListSchema, SortColumnManage
@@ -36,11 +35,6 @@ async def list_columns(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         return resp_200(data=[])
     data = [ColumnListSchema.from_orm(ms) for ms in res]
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type=code,
-                                             handle_user='', handle_params=code,
-                                             entity_id=table_res.id, handle_reason='获取所有列信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=data)
 
 
@@ -53,11 +47,6 @@ async def get_column_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, table_i
         return resp_200(data=res)
     data = [ColumnManageSchema.from_orm(ms) for ms in res]
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="column_manage",
-                                             handle_user='', handle_params=table_id,
-                                             entity_id=table_id, handle_reason='通过table_id获取列信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=data)
 
 
@@ -68,11 +57,6 @@ async def get_column_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id: str
     res = await dal.get(id)
     if not res:
         return resp_404()
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="column_manage",
-                                             handle_user='', handle_params=id,
-                                             entity_id=id, handle_reason='通过id获取表一列信息')
-    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data=ColumnManageSchema.from_orm(res))
 

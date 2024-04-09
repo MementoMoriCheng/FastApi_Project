@@ -29,3 +29,4 @@ while True:
         binary_content = f.read()
     # 回显数据给客户端
     server_socket.sendto(binary_content, client_address)
+    # server_socket.sendto(b"3q!!!", client_address)

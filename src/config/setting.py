@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     UDP_REMOTE_ADDRESS: str = dotenv_config.get("UDP_REMOTE_ADDRESS")
     UDP_REMOTE_PORT: int = dotenv_config.get("UDP_REMOTE_PORT")
 
+    WEBSOCKET_ADDRESS: str = dotenv_config.get("WEBSOCKET_ADDRESS")
+    WEBSOCKET_PORT: int = dotenv_config.get("WEBSOCKET_PORT")
+
+    GNSS_FIELDS: str = dotenv_config.get("GNSS_FIELDS")
+
     LOG_PATH: str = dotenv_config.get("LOG_PATH")
     LOG_NAME: str = dotenv_config.get("LOG_NAME")
 

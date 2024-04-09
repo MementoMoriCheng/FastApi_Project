@@ -143,10 +143,20 @@ class SqlHandle(object):
         try:
             with self.get_sync_session() as session:
                 table = self._get_table(table_name)
-                columns = []
                 if fields:
-                    columns = [getattr(table.c, field.code if hasattr(field, 'code') else field) for field in fields]
-                    fields = columns
+                    try:
+                        columns = []
+                        for field in fields:
+                            try:
+                                column = getattr(table.c, field)
+                                columns.append(column)
+                            except AttributeError as err:
+                                logger.warning(f"Invalid column '{field}' for table {table_name}: {err}")
+                                continue
+                        fields = columns
+                    except TypeError as err:
+                        logger.warning(f"Invalid fields type for table {table_name}: {err}. Defaulting to all columns.")
+                        fields = table.columns
                 else:
                     fields = table.columns
                 stmt = select(fields)
@@ -166,7 +176,7 @@ class SqlHandle(object):
                 if order_by:
                     for field, direction in order_by.items():
                         column = getattr(table.c, field)
-                        stmt = stmt.order_by(column.desc() if direction == 'desc' else column)
+                        stmt = stmt.order_by(column.desc() if direction else column)
 
                 if limit is not None and offset is not None:
                     stmt = stmt.limit(limit).offset(offset)

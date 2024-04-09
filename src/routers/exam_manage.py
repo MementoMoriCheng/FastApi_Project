@@ -106,7 +106,7 @@ async def update_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: s
 
 # -----------------------------------------------考试结果信息
 
-@router.post("/exam_result/filter_exam", tags=["ExaminationManage"], summary="查询考试结果列表信息")
+@router.post("/exam_result/filter_exam_result", tags=["ExaminationManage"], summary="查询考试结果列表信息")
 async def list_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, exam_info: QueryExamResultSchema):
     dal.setDb(ExamResult)
     query_params_mapping = exam_info.dict(exclude_none=True)
@@ -186,7 +186,7 @@ async def delete_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_:
     return resp_200(data={'id': id_})
 
 
-@router.patch("/exam_result/{id_}", tags=["ExaminationManage"], summary="编辑考试信息")
+@router.patch("/exam_result/{id_}", tags=["ExaminationManage"], summary="编辑考试结果信息")
 async def update_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdateExamResultSchema):
     dal.setDb(ExamResult)
     # logger.info(f"修改数据库表的列:{obj_in.dict()}")

@@ -4,7 +4,7 @@
 # @Author  : yilifeng
 # @File    : udp_client.py
 # @Software: PyCharm
-
+import time
 import socket
 from datetime import datetime
 from src.config.setting import settings
@@ -25,7 +25,7 @@ class UDPClient:
 
 
 if __name__ == "__main__":
-    # u_c = UDPClient()
+    u_c = UDPClient()
     # src_path = "D:\\File\\dzm9b"
     # with open(src_path, "rb") as f:
     #     binary_content = f.read()
@@ -35,9 +35,9 @@ if __name__ == "__main__":
     #     u_c.sendToUDPSever(data)
     #     time.sleep(1)
     # u_c.sendToUDPSever(binary_content)
-    logger.info('Hello, UDP Server!')
-    logger.warning('Hello, UDP Server!')
-    logger.error('Hello, UDP Server!')
+    # logger.info('Hello, UDP Server!')
+    # logger.warning('Hello, UDP Server!')
+    # logger.error('Hello, UDP Server!')
     log_records = {
         'id': generate_uuid(),
         'level': 3,
@@ -49,8 +49,8 @@ if __name__ == "__main__":
         'entity_id': 'Hello, UDP Server!',
         'create_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     }
-    sql_handle.add_records("log_manage", log_records)
-    # data = b'Hello, UDP Server!'
-    # for i in range(20):
-    #     u_c.sendToUDPSever(data + str(i).encode())
-    #     time.sleep(1)
+    # sql_handle.add_records("log_manage", log_records)
+    data = b'Hello, UDP Server!'
+    for i in range(20):
+        u_c.sendToUDPSever(data + str(i).encode())
+        time.sleep(1)
