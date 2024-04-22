@@ -6,7 +6,7 @@
 # @Software: PyCharm
 
 
-from datetime import datetime
+from datetime import datetime, date
 from pydantic import BaseModel
 from typing import Union, Text, List
 
@@ -14,62 +14,40 @@ from typing import Union, Text, List
 # -----------考试信息
 class SearchExaminationSchema(BaseModel):
     name: str = None
-    exam_date: Union[datetime, None]
-    is_delete: int = None
-    is_published: int = None
+    exam_date: Union[date, None]
 
 
 class ExaminationSchema(BaseModel):
-    id: str
     name: str = None
     paper_id: str = None
     description: str = None
-    exam_date: Union[datetime, None]
-    total_time: int = 120
+    exam_date: Union[date, None]
     start_time: Union[datetime, None]
     end_time: Union[datetime, None]
     major: str = None
     tips: str = None
-    is_delete: int = 0
     is_published: int = 0
-    publish_date: Union[datetime, None]
-    created_user: str = None
-    created_at: Union[datetime, None]
-    updated_user: str = None
-    updated_at: Union[datetime, None]
+    total_time: int = 0
 
     class Config:
         orm_mode = True
-
-
-class UpdateExaminationSchema(BaseModel):
-    name: str = None
-    paper_id: str = None
-    description: str = None
-    exam_date: Union[datetime, None]
-    total_time: int = 120
-    start_time: Union[datetime, None]
-    end_time: Union[datetime, None]
-    major: str = None
-    tips: str = None
-    is_delete: int = 0
-    is_published: int = 0
-    publish_date: Union[datetime, None]
-    updated_user: str = None
-    updated_at: Union[datetime, None]
 
 
 # -----------考试结果信息
 class ExamResultSchema(BaseModel):
-    id: str
-    student_id: str = None
-    exam_id: str = None
-    result_mark: int = 0
+    student_id: str
+    exam_id: str
+    total_score: int
     start_time: Union[datetime, None]
     end_time: Union[datetime, None]
 
     class Config:
         orm_mode = True
+
+
+class EditExamResultSchema(BaseModel):
+    exam_id: str
+    student_id: List[str]
 
 
 class QueryExamResultSchema(BaseModel):
@@ -77,22 +55,50 @@ class QueryExamResultSchema(BaseModel):
     exam_id: str = None
 
 
-class CreateExamResultSchema(BaseModel):
-    id: str
-    student_id: List = []
-    exam_id: str = None
-    result_mark: int = 0
-    start_time: Union[datetime, None]
-    end_time: Union[datetime, None]
-
-
 class UpdateExamResultSchema(BaseModel):
-    result_mark: int = 0
+    total_score: int
+
+
+class CalQuestion(BaseModel):
+    id: str
+    answer: Text = None
+    score: int = 1
+    type: int = 1
+
+    class Config:
+        orm_mode = True
+
+
+class StudentAnswer(BaseModel):
+    id: str
+    question_id: str
+    solution: Text = None
+
+    class Config:
+        orm_mode = True
+
+
+class StudentExamResult(BaseModel):
+    id: str
+    student_id: str
+
+    class Config:
+        orm_mode = True
+
+
+class StudentIn(BaseModel):
+    exam_id: str
+    student_id: List[str]
+    # -----自动阅卷部分
+    single_choice: int = 1
+    multiple_choice: int = 1
+    fill: int = 1
+    judge: int = 1
+    short_answer: int = 1
 
 
 # -----------考试结果详情信息
 class ExamResultDetailSchema(BaseModel):
-    id: str
     exam_result_id: str = None
     question_id: str = None
     mark: int = 0
@@ -102,228 +108,220 @@ class ExamResultDetailSchema(BaseModel):
         orm_mode = True
 
 
+class EditExamResultDetailSchema(BaseModel):
+    exam_result_id: str = None
+    question_id: str = None
+    solution: Text = None
+
+
 # -----------试卷信息
 class SearchPaperSchema(BaseModel):
-    name: str = None
-    duration_minutes: int = None
-    is_delete: int = None
-    is_published: int = None
+    name: str
 
 
 class PaperSchema(BaseModel):
-    id: str
+    id: str = None
     name: str = None
     description: str = None
     score: int = 100
     duration_minutes: int = 60
-    is_delete: int = 0
-    is_published: int = 0
-    created_user: str = None
-    created_at: Union[datetime, None]
-    updated_user: str = None
-    updated_at: Union[datetime, None]
+    publish_date: Union[datetime, None]
 
     class Config:
         orm_mode = True
 
 
-class UpdatePaperSchema(BaseModel):
+class EditPaperSchema(BaseModel):
     name: str = None
     description: str = None
     score: int = 100
     duration_minutes: int = 60
-    is_delete: int = 0
-    is_published: int = 0
-    updated_user: str = None
-    updated_at: Union[datetime, None]
-
-
-# -----------试卷模块信息
-class PaperModuleSchema(BaseModel):
-    id: str
-    paper_id: str = None
-    title: str = None
-    description: str = None
-    score: int = 100
-    sequence_number: int = 1
-    created_user: str = None
-    created_at: Union[datetime, None]
-    updated_user: str = None
-    updated_at: Union[datetime, None]
-
-    class Config:
-        orm_mode = True
-
-
-class UpdatePaperModuleSchema(BaseModel):
-    paper_id: str = None
-    title: str = None
-    description: str = None
-    score: int = 100
-    sequence_number: int = 1
-    updated_user: str = None
-    updated_at: Union[datetime, None]
+    publish_date: Union[datetime, None]
 
 
 # -----------试卷试题信息
+class SearchQuestionSchema(BaseModel):
+    course_chapter_id: str = None
+    question: str = None
+    type: int = None
+
+
 class PaperQuestionSchema(BaseModel):
-    id: str
     paper_id: str = None
     question_id: str = None
-    module: str = None
     sequence_number: int = 1
     mark: int = 0
-    created_at: Union[datetime, None]
+    module: str = None
 
     class Config:
         orm_mode = True
 
 
-class UpdatePaperQuestionSchema(BaseModel):
+class CreatePaperQuestionSchema(BaseModel):
+    # --------题型部分试题数量
+    single_choice: int = 10
+    multiple_choice: int = 5
+    fill: int = 5
+    judge: int = 5
+    short_answer: int = 5
+    # --------基本信息
     paper_id: str = None
     question_id: str = None
-    module: str = None
     sequence_number: int = 1
     mark: int = 0
+    module: str = None
 
 
 # -----------试题信息
-class SearchQuestionSchema(BaseModel):
-    question: str = None
-    created_user: str = None
-    type: int = None
-    is_delete: int = None
-    status: int = None
-
-
 class QuestionSchema(BaseModel):
     id: str
-    lesson_name: Text = None
-    lesson_chapter: Text = None
-    knowledge_points: Text = None
-    serial_number: str = None
-
+    course_chapter_id: str
     question: Text = None
+    type: int = 1
+    options: Text = None
+    answer: Text = None
     analysis: Text = None
     level_choices: int = 1
-    options: Text = None
-    right_answer: Text = None
     score: int = 1
-    type: int = 1
-    is_delete: int = 0
     status: int = 0
-    created_user: str = None
-    created_at: Union[datetime, None]
-    updated_user: str = None
-    updated_at: Union[datetime, None]
 
     class Config:
         orm_mode = True
 
 
-class UpdateQuestionSchema(BaseModel):
-    lesson_name: Text = None
-    lesson_chapter: Text = None
-    knowledge_points: Text = None
-    serial_number: str = None
+class EditQuestionSchema(BaseModel):
+    course_chapter_id: str
     question: Text = None
+    type: int = 1
+    options: Text = None
+    answer: Text = None
     analysis: Text = None
     level_choices: int = 1
-    options: Text = None
-    right_answer: Text = None
     score: int = 1
-    type: int = 1
-    is_delete: int = 0
     status: int = 0
-    updated_user: str = None
-    updated_at: Union[datetime, None]
 
 
 # -----------课程表信息
-class SearchScheduleSchema(BaseModel):
-    course_name: str = None
-    classroom: str = None
-    teacher: str = None
-    classes: str = None
-    is_delete: int = None
-    status: int = None
-
 
 class ScheduleSchema(BaseModel):
-    id: str
-    course_date: Union[datetime, None]
-    time_periods: Union[datetime, None]
+    id: str = None
+    course_date: Union[date, None]
+    course_sequence: int = 1
+    course_start: Union[datetime, None]
+    course_end: Union[datetime, None]
     classroom: str = None
     course_name: str = None
     teacher: str = None
     classes: str = None
     students_num: int = 0
 
-    is_delete: int = 0
     status: int = 0
     notes: Text = None
-    created_at: Union[datetime, None]
-    updated_at: Union[datetime, None]
 
     class Config:
         orm_mode = True
 
 
-class UpdateScheduleSchema(BaseModel):
-    course_date: Union[datetime, None]
-    time_periods: Union[datetime, None]
+class EditScheduleSchema(BaseModel):
+    course_date: Union[date, None]
+    course_sequence: int = 1
+    course_start: Union[datetime, None]
+    course_end: Union[datetime, None]
     classroom: str = None
     course_name: str = None
     teacher: str = None
     classes: str = None
     students_num: int = 0
 
-    is_delete: int = 0
     status: int = 0
     notes: Text = None
-    updated_at: Union[datetime, None]
 
 
 # -----------教学日志信息
-class SearchTeachingJournalSchema(BaseModel):
-    course_name: str = None
-    classroom: str = None
-    teacher: str = None
-    course_content: Text = None
-    is_delete: int = None
-    status: int = None
-
 
 class TeachingJournalSchema(BaseModel):
-    id: str
-    course_date: Union[datetime, None]
-    time_periods: Union[datetime, None]
+    id: str = None
+    course_date: Union[date, None]
+    course_sequence: int = 1
+    course_start: Union[datetime, None]
+    course_end: Union[datetime, None]
     classroom: str = None
     course_name: str = None
     teacher: str = None
     course_content: Text = None
     students_num: int = 0
 
-    is_delete: int = 0
     status: int = 0
     notes: Text = None
-    created_at: Union[datetime, None]
-    updated_at: Union[datetime, None]
 
     class Config:
         orm_mode = True
 
 
-class UpdateTeachingJournalSchema(BaseModel):
+class EditTeachingJournalSchema(BaseModel):
     course_date: Union[datetime, None]
-    time_periods: Union[datetime, None]
+    course_sequence: int = 1
+    course_start: Union[datetime, None]
+    course_end: Union[datetime, None]
     classroom: str = None
     course_name: str = None
     teacher: str = None
-    classes: str = None
+    course_content: Text = None
     students_num: int = 0
 
-    is_delete: int = 0
     status: int = 0
     notes: Text = None
-    updated_at: Union[datetime, None]
+
+
+# -----------课程章节信息
+class SearchCourseChapterSchema(BaseModel):
+    key_word: Text
+
+
+class CourseChapterSchema(BaseModel):
+    id: str = None
+    parent_id: str = None
+    type: int = 1
+    course_name: Text = None
+    course_chapter: Text = None
+    serial_number: str = None
+    knowledge_points: Text = None
+    learning_hours: int = 0
+
+    class Config:
+        orm_mode = True
+
+
+class CourseChapterID(BaseModel):
+    id: str = None
+
+    class Config:
+        orm_mode = True
+
+
+class EditCourseChapterSchema(BaseModel):
+    parent_id: str = None
+    type: int = 1
+    course_name: Text = None
+    course_chapter: Text = None
+    serial_number: str = None
+    knowledge_points: Text = None
+    learning_hours: int = 0
+
+
+# -----------课程资源信息
+class CourseSourceSchema(BaseModel):
+    course_chapter_id: str = None
+    status: int = 1
+    file_id: Union[str, None]
+    description: Text = None
+
+    class Config:
+        orm_mode = True
+
+
+class CourseSourceFile(CourseSourceSchema):
+    file_name: str = None
+
+    class Config:
+        orm_mode = True

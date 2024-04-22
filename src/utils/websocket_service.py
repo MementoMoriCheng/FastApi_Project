@@ -88,7 +88,7 @@ class WebSocketService:
                 data_info = await sql_handle.select("gnss_data", limit=1, fields=gnss_fields,
                                                     order_by={"create_time": True})
 
-                message = json.dumps({"type": "send", "content": data_info[0]})
+                message = json.dumps({"type": "send", "content": data_info[0] if data_info else " "})
                 await self.callback_send(message, websocket=websocket)
 
             # 链接断开

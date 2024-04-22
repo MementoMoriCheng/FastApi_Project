@@ -58,8 +58,21 @@ class RemoteFTPService:
         with open(filename, 'wb') as decrypted_file:
             decrypted_file.write(decrypted)
 
+    async def is_directory_exists(self, directory, mkdir=False):
+        try:
+            self.ftp.cwd(directory)
+            return True
+        except:
+            if mkdir:
+                f_path = os.path.dirname(directory)
+                await self.is_directory_exists(f_path, mkdir)
+                self.ftp.mkd(directory)
+            return False
+
     async def upload_encrypted_data_to_ftp(self, file_data, remote_file_path):
         self.ftp.set_pasv(True)
+        f_path = os.path.dirname(remote_file_path)
+        await self.is_directory_exists(f_path, True)
         self.ftp.storbinary(f'STOR {remote_file_path}', file_data, self.buffer_size)
 
     async def download_ftp_file_encode(self, filename, remote_filename):

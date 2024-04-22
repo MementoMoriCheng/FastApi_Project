@@ -4,6 +4,7 @@
 # @Author  :
 # @File    : teaching_resources_manage.py
 # @Software: PyCharm
+import copy
 from typing import List
 from src.db.dals import ExecDAL, SortBy
 from fastapi import APIRouter, Depends
@@ -12,13 +13,16 @@ from src.utils.dependencies import DALGetter
 from src.utils.logger import logger, generate_mysql_log_data
 from src.utils.constant import PUBLISHED, DELETE, RESERVE, RecordsStatusCode
 from src.utils.responses import resp_200, resp_404, resp_500, resp_400
+from src.utils.generate_file import ExamPaperGenerator
+from src.utils.tools import CalculateGrade
 from src.db.models import (
-    Examination, ExamResult, ExamResultDetail, Paper, PaperModule, PaperQuestions
+    Examination, ExamResult, ExamResultDetail, Paper, PaperQuestions, Questions
 )
 from src.db.schemas.lesson_examination import (
-    ExaminationSchema, SearchExaminationSchema, UpdateExaminationSchema, ExamResultSchema, UpdateExamResultSchema,
-    ExamResultDetailSchema, CreateExamResultSchema, QueryExamResultSchema, SearchPaperSchema, PaperSchema,
-    UpdatePaperSchema, PaperModuleSchema, UpdatePaperModuleSchema, UpdatePaperQuestionSchema, PaperQuestionSchema
+    ExaminationSchema, SearchExaminationSchema, ExamResultSchema, UpdateExamResultSchema,
+    ExamResultDetailSchema, QueryExamResultSchema, SearchPaperSchema, PaperSchema, PaperQuestionSchema,
+    CreatePaperQuestionSchema, EditPaperSchema, QuestionSchema, EditExamResultSchema, EditExamResultDetailSchema,
+    CalQuestion, StudentAnswer, StudentExamResult, StudentIn
 )
 
 router = APIRouter()
@@ -26,10 +30,11 @@ router = APIRouter()
 
 # -----------------------------------------------考试信息
 
-@router.post("/exam_info/filter_exam", tags=["ExaminationManage"], summary="查询考试信息")
+@router.post("/exam_info/filter_exam", tags=["Examination"], summary="查询考试信息")
 async def list_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, exam_info: SearchExaminationSchema):
     dal.setDb(Examination)
     query_params_mapping = exam_info.dict(exclude_none=True)
+    query_params_mapping.update(is_delete=RESERVE)
     if exam_info.name is not None:
         query_params_mapping['name__contains'] = query_params_mapping.pop('name')
     res = await dal.get_by_all(**query_params_mapping)
@@ -39,10 +44,9 @@ async def list_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, exam_inf
     return resp_200(data={"data": data, "total": len(res)})
 
 
-@router.get('/exam_info/{id_}', tags=['ExaminationManage'], summary="通过id获取考试信息")
+@router.get('/exam_info/{id_}', tags=['Examination'], summary="通过id获取考试信息")
 async def get_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(Examination)
-    # logger.debug(f"通过id获取考试信息:{id_}")
     res = await dal.get_by(id=id_, is_delete=RESERVE, is_published=PUBLISHED)
     if not res:
         return resp_404(msg='没有找到该考试的详情信息！')
@@ -50,66 +54,241 @@ async def get_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str)
     return resp_200(data=data)
 
 
-@router.post("/exam_info", tags=["ExaminationManage"], summary="创建考试信息")
-async def create_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: ExaminationSchema):
+@router.post("/exam_info", tags=["Examination"], summary="创建考试信息")
+async def create_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, exam_info: ExaminationSchema):
     dal.setDb(Examination)
-    # logger.info(f"创建数据库表的列:{obj_in.dict()}")
-    res = await dal.create(obj_in)
+    res = await dal.create(exam_info)
     if not res:
         return resp_400(msg='创建失败')
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
-    #                                              entity_id=res.id, handle_reason='创建考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
-    return resp_200(data=res)
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='examination',
+                                             handle_user='', handle_params=exam_info.dict(),
+                                             entity_id=res.id, handle_reason='创建考试信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    return resp_200(data=res.id)
 
 
-@router.delete("/exam_info/{id_}", tags=["ExaminationManage"], summary="删除考试信息")
+@router.delete("/exam_info/{id_}", tags=["Examination"], summary="删除考试信息")
 async def delete_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(Examination)
-    # logger.info(f"删除考试信息:{id_}")
     ms = await dal.get(id_)
     if not ms:
         return resp_404(msg='考试不存在，删除失败！')
     res = await dal.update(id_, {'is_delete': DELETE})
     if not res:
         return resp_500()
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="column_manage",
-    #                                              handle_user='', handle_params=id_,
-    #                                              entity_id=id_, handle_reason='删除考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="examination",
+                                             handle_user='', handle_params=id_,
+                                             entity_id=id_, handle_reason='删除考试信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
     return resp_200(data={'id': id_})
 
 
-@router.patch("/exam_info/{id_}", tags=["ExaminationManage"], summary="编辑考试信息")
-async def update_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdateExaminationSchema):
+@router.patch("/exam_info/{id_}", tags=["Examination"], summary="编辑考试信息")
+async def update_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, exam_info: ExaminationSchema):
     dal.setDb(Examination)
-    # logger.info(f"修改数据库表的列:{obj_in.dict()}")
     ms = await dal.get(id_)
     if not ms:
         return resp_404(msg='编辑失败！考试不存在，无法进行编辑！')
-    res = await dal.update(id_, obj_in)
+    res = await dal.update(id_, exam_info)
     if not res:
         return resp_500()
 
-    # mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                          handle_user=obj_in.update_user, handle_params=obj_in.dict(),
-    #                                          entity_id=id_, handle_reason='编辑考试信息')
-    # await sql_handle.add_records("log_manage", mysql_log_data)
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='examination',
+                                             handle_user='', handle_params=exam_info.dict(),
+                                             entity_id=id_, handle_reason='编辑考试信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    return resp_200(data=res, msg='编辑成功')
+
+
+# -----------------------------------------------试卷信息
+
+@router.post("/paper/filter_paper", tags=["Paper"], summary="查询试卷列表信息")
+async def list_paper_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, paper_info: SearchPaperSchema):
+    dal.setDb(Paper)
+    query_params_mapping = paper_info.dict(exclude_none=True)
+    query_params_mapping.update(is_delete=RESERVE)
+    if paper_info.name is not None:
+        query_params_mapping['name__contains'] = query_params_mapping.pop('name')
+    res = await dal.get_by_all(**query_params_mapping)
+    if not res:
+        return resp_200(data=[])
+    data = [PaperSchema.from_orm(ms) for ms in res]
+    return resp_200(data={"data": data, "total": len(res)})
+
+
+@router.get('/paper/{id_}', tags=['Paper'], summary="通过id获取试卷信息")
+async def get_paper_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
+    dal.setDb(Paper)
+    res = await dal.get_by(id=id_, is_delete=RESERVE)
+    if not res:
+        return resp_404(msg='没有找到该试卷的详情信息！')
+    data = PaperSchema.from_orm(res)
+    return resp_200(data=data)
+
+
+@router.post("/paper", tags=["Paper"], summary="创建试卷信息")
+async def create_paper_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, paper_info: EditPaperSchema):
+    dal.setDb(Paper)
+    res = await dal.create(paper_info)
+    if not res:
+        return resp_400(msg='创建试卷失败！')
+    paper_data = paper_info.dict()
+    if paper_info.publish_date:
+        paper_data.update({'publish_date': paper_info.publish_date.strftime('%Y-%m-%d %H:%M:%SZ')})
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='paper',
+                                             handle_user='', handle_params=paper_data,
+                                             entity_id=res.id, handle_reason='创建考试信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    return resp_200(data=res.id)
+
+
+@router.delete("/paper/{id_}", tags=["Paper"], summary="删除试卷信息")
+async def delete_paper_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
+    dal.setDb(Paper)
+    ms = await dal.get_by(id=id_, is_delete=RESERVE)
+    if not ms:
+        return resp_404(msg='试卷不存在，删除失败！')
+    res = await dal.update(id_, {'is_delete': DELETE})
+    if not res:
+        return resp_500()
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="paper",
+                                             handle_user='', handle_params=id_,
+                                             entity_id=id_, handle_reason='删除考试信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    return resp_200(data={'id': id_})
+
+
+@router.patch("/paper/{id_}", tags=["Paper"], summary="编辑试卷信息")
+async def update_paper_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, paper_info: EditPaperSchema):
+    dal.setDb(Paper)
+    ms = await dal.get_by(id=id_, is_delete=RESERVE)
+    if not ms:
+        return resp_404(msg='编辑失败！试卷不存在，无法进行编辑！')
+    res = await dal.update(id_, paper_info)
+    if not res:
+        return resp_500()
+    paper_data = paper_info.dict()
+    if paper_info.publish_date:
+        paper_data.update({'publish_date': paper_info.publish_date.strftime('%Y-%m-%d %H:%M:%SZ')})
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='paper',
+                                             handle_user='', handle_params=paper_data,
+                                             entity_id=id_, handle_reason='编辑试卷信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    return resp_200(data=res, msg='编辑成功')
+
+
+# -----------------------------------------------试卷-试题信息
+
+@router.get('/paper_question/{id_}', tags=['PaperQuestions'], summary="通过试卷ID获取试题信息")
+async def get_paper_question_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                                  question_dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
+    dal.setDb(PaperQuestions)
+    res = await dal.get_by_all(paper_id=id_,
+                               order_by_list=[SortBy('sort', False), SortBy('sequence_number', False)])
+    if not res:
+        return resp_200(data=[])
+    paper_question_info = []
+    question_dal.setDb(Questions)
+    for ms in res:
+        id_ = ms.question_id
+        question = await question_dal.get_by(id=id_)
+        question_info = QuestionSchema.from_orm(question)
+        paper_question_info.append(question_info)
+    return resp_200(data=paper_question_info)
+
+
+@router.post("/paper_question", tags=["PaperQuestions"], summary="创建试卷-试题信息")
+async def create_paper_question_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
+                                     create_paper_question: CreatePaperQuestionSchema):
+    paper_info_list = []
+    create_paper_dict = create_paper_question.dict()
+    question_type_counts = {k: v for k, v in create_paper_dict.items() if
+                            k in ['single_choice', 'multiple_choice', 'fill', 'judge', 'short_answer']}
+    exam_paper = ExamPaperGenerator("questions")
+    exam_paper_info = await exam_paper.generate_exam(question_type_counts)
+    for idx, question in enumerate(exam_paper_info):
+        paper_info = PaperQuestionSchema()
+        paper_info.paper_id = create_paper_question.paper_id
+        paper_info.question_id = question.question_id
+        paper_info.sequence_number = idx + 1
+        paper_info.module = question.question_type
+        paper_info_list.append(paper_info)
+    dal.setDb(PaperQuestions)
+    res = await dal.buck_create(paper_info_list)
+    if not res:
+        return resp_400(msg='创建失败')
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='paper_questions',
+                                             handle_user='', handle_params=create_paper_dict,
+                                             entity_id='', handle_reason='创建试卷-试题信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+    return resp_200(data=res)
+
+
+@router.delete("/paper_question", tags=["PaperQuestions"], summary="删除试卷-试题信息")
+async def delete_paper_question_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, ids_: List[str]):
+    dal.setDb(PaperQuestions)
+    # 存放即将删除的试题IDs
+    to_delete_ids = []
+    # 存放不存在的试题IDs
+    not_exists_ids = []
+    for q_id in ids_:
+        ms = await dal.get(q_id)
+        if ms:
+            to_delete_ids.append(q_id)
+        else:
+            not_exists_ids.append(q_id)
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="paper_questions",
+                                             handle_user='', handle_params=ids_,
+                                             entity_id='', handle_reason='删除试卷-试题信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    if len(to_delete_ids) == 0:
+        return resp_200(data={'notExistsQuestions': not_exists_ids}, msg='没有可以删除试题！')
+    else:
+        await dal.delete_batch(to_delete_ids)
+        if len(not_exists_ids) > 0:
+            return resp_200(msg='删除试题成功！但有不存在的试题ID', data={'notExistsQuestions': not_exists_ids})
+        else:
+            return resp_200(msg='删除试题成功!')
+
+
+@router.patch("/paper_question/{id_}", tags=["PaperQuestions"], summary="编辑试卷-试题信息")
+async def update_paper_question_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str,
+                                     paper_question: PaperQuestionSchema):
+    dal.setDb(PaperQuestions)
+    ms = await dal.get(id_)
+    if not ms:
+        return resp_404(msg='编辑失败！试题绑定信息不存在，无法进行编辑！')
+    res = await dal.update(id_, paper_question)
+    if not res:
+        return resp_500()
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='paper_questions',
+                                             handle_user='', handle_params=paper_question.dict(),
+                                             entity_id=id_, handle_reason='编辑试卷-试题信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data=res, msg='编辑成功')
 
 
 # -----------------------------------------------考试结果信息
 
-@router.post("/exam_result/filter_exam_result", tags=["ExaminationManage"], summary="查询考试结果列表信息")
+@router.post("/exam_result/filter_exam_result", tags=["ExamResult"], summary="查询考试结果列表信息")
 async def list_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, exam_info: QueryExamResultSchema):
     dal.setDb(ExamResult)
     query_params_mapping = exam_info.dict(exclude_none=True)
+    query_params_mapping.update(is_delete=RESERVE)
     res = await dal.get_by_all(**query_params_mapping)
     if not res:
         return resp_200(data=[])
@@ -123,7 +302,7 @@ async def list_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, exam_i
     return resp_200(data={"data": data, "total": len(res)})
 
 
-@router.get('/exam_result/{id_}', tags=['ExaminationManage'], summary="通过id获取考试结果信息")
+@router.get('/exam_result/{id_}', tags=['ExamResult'], summary="通过id获取考试结果信息")
 async def get_exam_result_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(ExamResult)
     # logger.debug(f"通过id获取考试信息:{id_}")
@@ -140,31 +319,92 @@ async def get_exam_result_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id
     return resp_200(data=data)
 
 
-@router.post("/exam_result", tags=["ExaminationManage"], summary="创建考试结果信息")
-async def create_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: CreateExamResultSchema):
+@router.post("/exam_result/cal_grade", tags=["ExamResult"], summary="计算考试结果")
+async def cal_grade(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                    exam_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                    question_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                    paper_question_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                    result_detail_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                    # *, exam_id: str, student_id: List[str]):
+                    *, payload: StudentIn):
+    if len(payload.student_id) == 0:
+        return resp_200(msg='考试关联的学生为空')
+    # 获取考试信息
+    exam_dal.setDb(Examination)
+    exam_res = await exam_dal.get(payload.exam_id)
+    # 获取试卷信息
+    paper_question_dal.setDb(PaperQuestions)
+    paper_question_res = await paper_question_dal.get_by_all(paper_id=exam_res.paper_id)
+    # 获取考题信息
+    cal_question_info = []
+    question_dal.setDb(Questions)
+    for ms in paper_question_res:
+        question = await question_dal.get_by(id=ms.question_id)
+        question_info = CalQuestion.from_orm(question)
+        cal_question_info.append(question_info)
+    # 学生考试结果信息
+    student_exam = []
     dal.setDb(ExamResult)
-    # logger.info(f"创建数据库表的列:{obj_in.dict()}")
+    result_detail_dal.setDb(ExamResultDetail)
+    res = await dal.get_by_all(exam_id=payload.exam_id)
+    for rs in res:
+        for s_id in payload.student_id:
+            if rs.student_id == s_id:
+                student_er = StudentExamResult.from_orm(rs)
+                student_exam.append(student_er)
+
+    # 学生作答信息
+    student_exam_result = dict()
+    for student in student_exam:
+        student_answer = []
+        result_detail_res = await result_detail_dal.get_by_all(exam_result_id=student.id)
+        for s_a in result_detail_res:
+            question_info = StudentAnswer.from_orm(s_a)
+            student_answer.append(question_info)
+            student_exam_result.update({student.id: student_answer})
+
+    # cal_question_info考卷信息，答案及每道题的得分
+    # student_exam_result：{student.id: student_answer}学生的id及其答题情况
+    exam_result_list, exam_detail_result_list = [], []
+    c_q = CalculateGrade()
+    for s_id, s_answers in student_exam_result.items():
+        stu_score, stu_score_detail = c_q.cal_grade(cal_question_info, s_answers, payload)
+        exam_detail_result_list.extend(stu_score_detail)
+        exam_result_res = await dal.update(s_id, {
+            'total_score': stu_score,
+            'start_time': exam_res.start_time,
+            'end_time': exam_res.end_time})
+        exam_result_list.append(exam_result_res)
+    for exam_detail_result in exam_detail_result_list:
+        await result_detail_dal.update(exam_detail_result["id"], exam_detail_result)
+    return resp_200(data=exam_result_list)
+
+
+@router.post("/exam_result", tags=["ExamResult"], summary="创建考试结果信息")
+async def create_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                             *, exam_result: EditExamResultSchema):
+    dal.setDb(ExamResult)
     exam_result_list = []
-    student_id = obj_in.student_id
+    student_id = exam_result.student_id
     if len(student_id) == 0:
         return resp_200(msg='考试关联的学生为空！')
     else:
         for s_id in student_id:
             exam_result_list.append({
-                'exam_id': obj_in.exam_id,
-                'student_id': s_id
+                'exam_id': exam_result.exam_id,
+                'student_id': s_id,
             })
     await dal.create_all(exam_result_list)
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
-    #                                              entity_id=res.id, handle_reason='创建考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='exam_result',
+                                             handle_user='', handle_params=exam_result.dict(),
+                                             entity_id='', handle_reason='创建考试结果信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
     return resp_200()
 
 
-@router.delete("/exam_result/{id_}", tags=["ExaminationManage"], summary="删除考试结果信息")
+@router.delete("/exam_result/{id_}", tags=["ExamResult"], summary="删除考试结果信息")
 async def delete_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(ExamResult)
     # logger.info(f"删除考试信息:{id_}")
@@ -186,7 +426,7 @@ async def delete_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_:
     return resp_200(data={'id': id_})
 
 
-@router.patch("/exam_result/{id_}", tags=["ExaminationManage"], summary="编辑考试结果信息")
+@router.patch("/exam_result/{id_}", tags=["ExamResult"], summary="编辑考试结果信息")
 async def update_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdateExamResultSchema):
     dal.setDb(ExamResult)
     # logger.info(f"修改数据库表的列:{obj_in.dict()}")
@@ -207,266 +447,48 @@ async def update_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_:
 
 # -----------------------------------------------考试结果详情
 
-@router.get('/exam_info_detail/{id_}', tags=['ExaminationManage'], summary="通过考试结果ID获取详情信息")
+@router.get('/exam_info_detail/{id_}', tags=['ExamResultDetail'], summary="通过考试结果ID获取详情信息")
 async def get_exam_info_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(ExamResultDetail)
-    # logger.debug(f"通过id获取考试信息:{id_}")
     res = await dal.get_by_all(exam_result_id=id_)
     if not res:
-        return resp_404(msg='没有找到该考试结果的详情信息！')
+        return resp_200(data=[])
 
     data = [ExamResultDetailSchema.from_orm(ms) for ms in res]
 
-    # mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
-    #                                          handle_user="", handle_params=id_,
-    #                                          entity_id=id_, handle_reason='通过id获取飞行计划的信息')
-    # await sql_handle.add_records("log_manage", mysql_log_data)
-
     return resp_200(data=data)
 
 
-@router.post("/exam_info_detail", tags=["ExaminationManage"], summary="创建考试结果详情信息")
-async def create_exam_info_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: ExamResultDetailSchema):
+@router.post("/exam_info_detail", tags=["ExamResultDetail"], summary="创建考试结果详情信息")
+async def create_exam_info_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
+                                  result_detail: ExamResultDetailSchema):
     dal.setDb(ExamResultDetail)
-    # logger.info(f"创建数据库表的列:{obj_in.dict()}")
-    res = await dal.create(obj_in)
+    res = await dal.create(result_detail)
     if not res:
         return resp_400(msg='创建失败')
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
-    #                                              entity_id=res.id, handle_reason='创建考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='exam_result_detail',
+                                             handle_user='', handle_params=result_detail.dict(),
+                                             entity_id=res.id, handle_reason='创建考试结果详情信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
     return resp_200(data=res)
 
 
-# -----------------------------------------------试卷信息
-
-@router.post("/paper/filter_paper", tags=["ExaminationManage"], summary="查询试卷列表信息")
-async def list_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, paper_info: SearchPaperSchema):
-    dal.setDb(Paper)
-    query_params_mapping = paper_info.dict(exclude_none=True)
-    if paper_info.name is not None:
-        query_params_mapping['name__contains'] = query_params_mapping.pop('name')
-    res = await dal.get_by_all(**query_params_mapping)
-    if not res:
-        return resp_200(data=[])
-    data = [PaperSchema.from_orm(ms) for ms in res]
-    return resp_200(data={"data": data, "total": len(res)})
-
-
-@router.get('/paper/{id_}', tags=['ExaminationManage'], summary="通过id获取试卷信息")
-async def get_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(Paper)
-    # logger.debug(f"通过id获取考试信息:{id_}")
-    res = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not res:
-        return resp_404(msg='没有找到该试卷的详情信息！')
-    data = PaperSchema.from_orm(res)
-    return resp_200(data=data)
-
-
-@router.post("/paper", tags=["ExaminationManage"], summary="创建试卷信息")
-async def create_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, paper_info: PaperSchema):
-    dal.setDb(Paper)
-    # logger.info(f"创建数据库表的列:{obj_in.dict()}")
-    res = await dal.create(paper_info)
-    if not res:
-        return resp_400(msg='创建试卷失败！')
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
-    #                                              entity_id=res.id, handle_reason='创建考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
-    return resp_200(data=res)
-
-
-@router.delete("/paper/{id_}", tags=["ExaminationManage"], summary="删除试卷信息")
-async def delete_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(Paper)
-    # logger.info(f"删除考试信息:{id_}")
+@router.patch("/exam_info_detail/{id_}", tags=["ExamResultDetail"], summary="编辑考试结果详情信息")
+async def update_exam_info_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str,
+                                  result_detail: EditExamResultDetailSchema):
+    dal.setDb(ExamResultDetail)
     ms = await dal.get(id_)
     if not ms:
-        return resp_404(msg='试卷不存在，删除失败！')
-    res = await dal.update(id_, {'is_delete': DELETE})
-    if not res:
-        return resp_500()
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="column_manage",
-    #                                              handle_user='', handle_params=id_,
-    #                                              entity_id=id_, handle_reason='删除考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
-    return resp_200(data={'id': id_})
-
-
-@router.patch("/paper/{id_}", tags=["ExaminationManage"], summary="编辑试卷信息")
-async def update_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdatePaperSchema):
-    dal.setDb(Paper)
-    # logger.info(f"修改数据库表的列:{obj_in.dict()}")
-    ms = await dal.get(id_)
-    if not ms:
-        return resp_404(msg='编辑失败！试卷不存在，无法进行编辑！')
-    res = await dal.update(id_, obj_in)
+        return resp_404(msg='编辑失败！考试结果详情不存在，无法进行编辑！')
+    res = await dal.update(id_, result_detail)
     if not res:
         return resp_500()
 
-    # mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                          handle_user=obj_in.update_user, handle_params=obj_in.dict(),
-    #                                          entity_id=id_, handle_reason='编辑考试信息')
-    # await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res, msg='编辑成功')
-
-
-# -----------------------------------------------试卷-模块信息
-
-@router.get('/paper_module/{id_}', tags=['ExaminationManage'], summary="通过试卷ID获取模块信息")
-async def get_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(PaperModule)
-    # logger.debug(f"通过id获取考试信息:{id_}")
-    res = await dal.get_by_all(paper_id=id_)
-    if not res:
-        return resp_404(msg='没有找到该试卷的详情信息！')
-    data = [PaperModuleSchema.from_orm(ms) for ms in res]
-    return resp_200(data=data)
-
-
-@router.post("/paper_module", tags=["ExaminationManage"], summary="创建试卷-模块信息")
-async def create_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, paper_info: PaperModuleSchema):
-    dal.setDb(PaperModule)
-    # logger.info(f"创建数据库表的列:{obj_in.dict()}")
-    res = await dal.create(paper_info)
-    if not res:
-        return resp_400(msg='创建失败')
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
-    #                                              entity_id=res.id, handle_reason='创建考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
-    return resp_200(data=res)
-
-
-@router.delete("/paper_module/{id_}", tags=["ExaminationManage"], summary="删除试卷-模块信息")
-async def delete_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, paper_id: str):
-    dal.setDb(PaperModule)
-    # logger.info(f"删除考试信息:{id_}")
-    ms = await dal.get(id_)
-    if not ms:
-        return resp_404(msg='模块不存在，删除失败！')
-    res = await dal.get_by(id=id_, paper_id=paper_id)
-    if len(res) > 0:
-        return resp_400(msg='该模块存在绑定的试题，无法删除！')
-    else:
-        delete_res = await dal.delete(id_)
-        if not delete_res:
-            return resp_500()
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="column_manage",
-    #                                              handle_user='', handle_params=id_,
-    #                                              entity_id=id_, handle_reason='删除考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
-    return resp_200(data={'id': id_})
-
-
-@router.patch("/paper_module/{id_}", tags=["ExaminationManage"], summary="编辑试卷-模块信息")
-async def update_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdatePaperModuleSchema):
-    dal.setDb(PaperModule)
-    # logger.info(f"修改数据库表的列:{obj_in.dict()}")
-    ms = await dal.get(id_)
-    if not ms:
-        return resp_404(msg='编辑失败！模块不存在，无法进行编辑！')
-    res = await dal.update(id_, obj_in)
-    if not res:
-        return resp_500()
-
-    # mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                          handle_user=obj_in.update_user, handle_params=obj_in.dict(),
-    #                                          entity_id=id_, handle_reason='编辑考试信息')
-    # await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res, msg='编辑成功')
-
-
-# -----------------------------------------------试卷-试题信息
-
-@router.get('/paper_question/{id_}', tags=['ExaminationManage'], summary="通过试卷ID获取试题信息")
-async def get_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(PaperQuestions)
-    # logger.debug(f"通过id获取考试信息:{id_}")
-    res = await dal.get_by_all(paper_id=id_,
-                               order_by_list=[SortBy('sort', False), SortBy('sequence_number', False)])
-    if not res:
-        return resp_404(msg='没有找到该试卷关联的试题信息！')
-    data = [PaperModuleSchema.from_orm(ms) for ms in res]
-    return resp_200(data=data)
-
-
-@router.post("/paper_question", tags=["ExaminationManage"], summary="创建试卷-试题信息")
-async def create_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, paper_info: PaperQuestionSchema):
-    dal.setDb(PaperQuestions)
-    # logger.info(f"创建数据库表的列:{obj_in.dict()}")
-    res = await dal.create(paper_info)
-    if not res:
-        return resp_400(msg='创建失败')
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
-    #                                              entity_id=res.id, handle_reason='创建考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    # TODO 增加自动创建试卷
-    return resp_200(data=res)
-
-
-@router.delete("/paper_question/{id_}", tags=["ExaminationManage"], summary="删除试卷-试题信息")
-async def delete_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, ids_: List[str]):
-    dal.setDb(PaperQuestions)
-    # logger.info(f"删除考试信息:{id_}")
-    # 存放即将删除的试题IDs
-    to_delete_ids = []
-    # 存放不存在的试题IDs
-    not_exists_ids = []
-    for q_id in ids_:
-        ms = await dal.get(q_id)
-        if ms:
-            to_delete_ids.append(q_id)
-        else:
-            not_exists_ids.append(q_id)
-
-    if len(to_delete_ids) == 0:
-        return resp_200(data={'notExistsQuestions': not_exists_ids}, msg='没有可以删除试题！')
-    else:
-        await dal.delete_batch(to_delete_ids)
-        if len(not_exists_ids) > 0:
-            return resp_200(msg='删除试题成功！但有不存在的试题ID', data={'notExistsQuestions': not_exists_ids})
-        else:
-            return resp_200(msg='删除试题成功!')
-    #
-    #     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="column_manage",
-    #                                              handle_user='', handle_params=id_,
-    #                                              entity_id=id_, handle_reason='删除考试信息')
-    #     await sql_handle.add_records("log_manage", mysql_log_data)
-    #
-
-
-@router.patch("/paper_question/{id_}", tags=["ExaminationManage"], summary="编辑试卷-试题信息")
-async def update_exam_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdatePaperQuestionSchema):
-    dal.setDb(PaperQuestions)
-    # logger.info(f"修改数据库表的列:{obj_in.dict()}")
-    ms = await dal.get(id_)
-    if not ms:
-        return resp_404(msg='编辑失败！试题绑定信息不存在，无法进行编辑！')
-    res = await dal.update(id_, obj_in)
-    if not res:
-        return resp_500()
-
-    # mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
-    #                                          handle_user=obj_in.update_user, handle_params=obj_in.dict(),
-    #                                          entity_id=id_, handle_reason='编辑考试信息')
-    # await sql_handle.add_records("log_manage", mysql_log_data)
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='exam_result_detail',
+                                             handle_user='', handle_params=result_detail.dict(),
+                                             entity_id=id_, handle_reason='编辑考试结果详情信息')
+    await sql_handle.add_records("log_manage", mysql_log_data)
 
     return resp_200(data=res, msg='编辑成功')

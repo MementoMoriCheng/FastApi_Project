@@ -5,12 +5,14 @@
 # @File    : tools.py
 # @Software: PyCharm
 # @desc    : 工具类
-
+import json
 import os
 import random
 import re
 import string
+import jieba
 from typing import List, Union
+from nltk.corpus import stopwords
 
 
 def test_password(password: str) -> Union[str, bool]:
@@ -44,9 +46,9 @@ def is_file_larger_than_200mb(file_path):
 
     """
     file_size_in_bytes = os.path.getsize(file_path)
-    file_size_in_MB = file_size_in_bytes / (1024 * 1024)
+    file_size_in_mb = file_size_in_bytes / (1024 * 1024)
 
-    if file_size_in_MB > 200:
+    if file_size_in_mb > 200:
         return True
     else:
         return False
@@ -71,141 +73,160 @@ def generate_string(length: int = 8) -> str:
     return ''.join(random.sample(string.ascii_letters + string.digits, length))
 
 
-# 计算由exam.html模版传过来的数据计算成绩
-def calGrade(request):
-    if request.method == 'POST':
-        # 得到学号和科目
-        sid = request.POST.get('sid')
-        subject1 = request.POST.get('subject')
-        paperid = request.POST.get('paperid')
-        print(paperid)
-        # 重新生成Student实例，Paper实例，Grade实例，名字和index中for的一致，可重复渲染
-        student = models.Student.objects.get(id=sid)
-        paper = models.Paper.objects.filter(major=student.major)
-        grade = models.Grade.objects.filter(sid=student.id)
+class CalculateGrade:
+    @staticmethod
+    def check_single_choice_answer(expected_answer: str, student_answer: str, score=None) -> bool:
+        """
+        检查单选题答案是否正确。
 
-        # 计算该门考试的学生成绩
-        question = models.Paper.objects.filter(subject=subject1).values("pid").values('pid__id', 'pid__answer',
-                                                                                      'pid__score', 'pid__kp')
+        Args:
+            expected_answer (str): 正确答案。
+            student_answer (str): 学生提交的答案。
+            score: 总分。
 
-        mygrade = 0  # 初始化一个成绩为0
-        for p in question:
-            qId = str(p['pid__id'])  # int 转 string,通过pid找到题号
-            myans = request.POST.get(qId)  # 通过 qid 得到学生关于该题的作答
-            # print(myans)
-            okans = p['pid__answer']  # 得到正确答案
-            # print(okans)
-            if myans == okans:  # 判断学生作答与正确答案是否一致
-                mygrade += 10  # 若一致,得到该题的分数,累加mygrade变量
-            else:
-                models.Knowledge.objects.create(sid_id=sid, pid_id=paperid, kp=p['pid__kp'])
+        Returns:
+            bool: 如果学生答案与正确答案一致，则返回True；否则返回False。
+        """
+        return student_answer.lower() == expected_answer.lower()
 
-        # 向Grade表中插入数据
-        models.Grade.objects.create(sid_id=sid, subject=subject1, grade=mygrade)
-        # print(mygrade)
-        # 重新渲染index.html模板
-        return render(request, 'index.html', {'student': student, 'paper': paper, 'grade': grade})
+    @staticmethod
+    def check_multiple_choice_answer(expected_answers: str, student_answer: str, score=None) -> bool:
+        """
+        检查多选题答案是否正确。错答、多答、少答均得0分
 
+        Args:
+            expected_answers (str): 正确答案列表，例如 a,b,c。
+            student_answer (str): 学生提交的答案，例如 'a,b,c'，答案间用逗号分隔。
+            score: 总分。
 
-# 计算考试成绩
-def calculateGrade(request):
-    if request.method == 'POST':
-        sid = request.POST.get('sid')
-        subject1 = request.POST.get('subject')
-        student = Student.objects.get(sid=sid)
-        paper = models.TestPaper.objects.filter(major=student.major)
-        grade = models.Record.objects.filter(sid=student.sid)
-        course = models.Course.objects.filter(course_name=subject1).first()
-        from django.utils.datetime_safe import datetime
-        now = datetime.now()
+        Returns:
+            bool: 如果学生答案包含了所有正确的选项并且没有其他选项，则返回True；否则返回False。
+        """
+        student_answer_list = set(student_answer.lower().split(','))
+        expected_answers_list = set(expected_answers.lower().split(','))
+        return student_answer_list == expected_answers_list
+
+    @staticmethod
+    def check_judge_answer(expected_answer: str, student_answer: str, score=None) -> bool:
+        """
+        检查判断题答案是否正确。
+
+        Args:
+            expected_answer (str): 正确答案，取值为 'true' 或 'false'。
+            student_answer (str): 学生提交的答案。
+            score: 总分。
+
+        Returns:
+            bool: 如果学生答案与正确答案一致，则返回True；否则返回False。
+        """
+        return student_answer.lower() == expected_answer.lower()
+
+    def check_fill_answer(self, expected_answer: str, student_answer: str, max_error_rate=0.1, score=None) -> bool:
+        """
+        检查填空题答案是否正确。
+
+        Args:
+            expected_answer (str): 正确答案。
+            student_answer (str): 学生提交的答案。
+            max_error_rate: 错误率，允许一定的容错率
+            score: 总分。
+
+        Returns:
+            bool: 如果学生答案与正确答案一致（不区分大小写），则返回True；否则返回False。
+        """
+        preprocessed_student_answer = self.preprocess_text(student_answer)
+        preprocessed_expected_answer = self.preprocess_text(expected_answer)
+
+        correct_answers = sum(1 for a, b in zip(preprocessed_expected_answer, preprocessed_student_answer) if a == b)
+        total_answers = len(expected_answer)
+        error_rate = (total_answers - correct_answers) / total_answers
+
+        if error_rate <= float(max_error_rate):
+            return True
+        else:
+            return False
+
+    def check_short_answer(self, expected_answer: str, student_answer: str, total_score=None):
+        """
+        检查简答题答案是否正确。
+
+        注意：此实现仅检查学生答案与标准答案的完全匹配，实际场景中可能需要更复杂的评估逻辑。
+
+        Args:
+            expected_answer (str): 正确答案。结构：[("鲁迅", 1),("短篇小说", 1),("主题思想深刻", 2),("反映社会的黑暗面", 2),
+                                                    ("揭露了封建礼教吃人的本质", 4)]
+            student_answer (str): 学生提交的答案。
+            total_score: 总分。
+
+        Returns:
+            bool: 如果学生答案与正确答案完全相同（不区分大小写），则返回True；否则返回False。
+        """
+        answer_key_words = [(self.preprocess_text(sentence), score) for sentence, score in expected_answer]
+        keyword_scores = {}
+        for words, score in answer_key_words:
+            for word in words:
+                if word in keyword_scores:
+                    keyword_scores[word] += score / len(words)
+                else:
+                    keyword_scores[word] = score / len(words)
+
+        preprocessed_student_answer = self.preprocess_text(student_answer)
+        keyword_scores = json.loads(expected_answer)
+        total_mark = 0
+        for word, score in keyword_scores.items():
+            if word in preprocessed_student_answer:
+                total_score += score
+
+        # 确保总分不超过总分
+        return min(total_mark, total_score)
+
+    @staticmethod
+    def preprocess_text(text):
+        text = text.strip()  # 去除首尾空白字符
+        words = jieba.lcut(text)  # 分词
+        words = [word.lower() for word in words if word.lower() not in stopwords.words('chinese')]  # 去除停用词并转为小写
+        return words
+
+    def cal_grade(self, question_info, student_exam_result, auto_cal):
+        """
+        计算考试成绩
+        Args:
+            question_info: 试卷标准答案
+            student_exam_result: 学生作答信息
+            auto_cal: 自动判卷部分
+
+        Returns:
+            总得分，题目得分
+        """
         # 计算考试成绩
-        questions = models.TestPaper.objects.filter(course__course_name=subject1). \
-            values('pid').values('pid__id', 'pid__answer', 'pid__score')
+        fun2num = {
+            'single_choice': 1,
+            'multiple_choice': 2,
+            'fill': 3,
+            'judge': 4,
+            'short_answer': 5
+        }
+
+        fun_dict_map, q_score = {}, []
+
+        def add_to_dict(field_name: str, func_name: str):
+            field_value = getattr(auto_cal, field_name)
+            if field_value == 1:
+                fun_dict_map[fun2num[field_name]] = getattr(self, f"check_{func_name}_answer")
+
+        add_to_dict('single_choice', 'single_choice')
+        add_to_dict('multiple_choice', 'multiple_choice')
+        add_to_dict('fill', 'fill')
+        add_to_dict('judge', 'judge')
+        add_to_dict('short_answer', 'short_answer')
 
         stu_grade = 0  # 初始化一个成绩
-        for p in questions:
-            qid = str(p['pid__id'])
-            stu_ans = request.POST.get(qid)
-            cor_ans = p['pid__answer']
-            if stu_ans == cor_ans:
-                stu_grade += p['pid__score']
-        models.Record.objects.create(sid_id=sid, course_id=course.id, grade=stu_grade, rtime=now)
-        context = {
-            'student': student,
-            'paper': paper,
-            'grade': grade
-        }
-        return render(request, 'index.html', context=context)
-
-
-def check_single_choice_answer(expected_answer: str, student_answer: str) -> bool:
-    """
-    检查单选题答案是否正确。
-
-    Args:
-        expected_answer (str): 正确答案。
-        student_answer (str): 学生提交的答案。
-
-    Returns:
-        bool: 如果学生答案与正确答案一致，则返回True；否则返回False。
-    """
-    return student_answer.lower() == expected_answer.lower()
-
-
-def check_multiple_choice_answer(expected_answers: List[str], student_answer: str) -> bool:
-    """
-    检查多选题答案是否正确。
-
-    Args:
-        expected_answers (List[str]): 正确答案列表，例如 ['a', 'b', 'c']。
-        student_answer (str): 学生提交的答案，例如 'a,b,c'，答案间用逗号分隔。
-
-    Returns:
-        bool: 如果学生答案包含了所有正确的选项并且没有其他选项，则返回True；否则返回False。
-    """
-    student_answer_list = set(student_answer.lower().split(','))
-    return student_answer_list == set(expected_answers)
-
-
-def check_true_or_false_answer(expected_answer: str, student_answer: str) -> bool:
-    """
-    检查判断题答案是否正确。
-
-    Args:
-        expected_answer (str): 正确答案，取值为 'true' 或 'false'。
-        student_answer (str): 学生提交的答案。
-
-    Returns:
-        bool: 如果学生答案与正确答案一致，则返回True；否则返回False。
-    """
-    return student_answer.lower() == expected_answer.lower()
-
-
-def check_fill_in_blank_answer(expected_answer: str, student_answer: str) -> bool:
-    """
-    检查填空题答案是否正确。
-
-    Args:
-        expected_answer (str): 正确答案。
-        student_answer (str): 学生提交的答案。
-
-    Returns:
-        bool: 如果学生答案与正确答案一致（不区分大小写），则返回True；否则返回False。
-    """
-    return student_answer.lower() == expected_answer.lower()
-
-
-def check_short_answer(expected_answer: str, student_answer: str) -> bool:
-    """
-    检查简答题答案是否正确。
-
-    注意：此实现仅检查学生答案与标准答案的完全匹配，实际场景中可能需要更复杂的评估逻辑。
-
-    Args:
-        expected_answer (str): 正确答案。
-        student_answer (str): 学生提交的答案。
-
-    Returns:
-        bool: 如果学生答案与正确答案完全相同（不区分大小写），则返回True；否则返回False。
-    """
-    return student_answer.lower() == expected_answer.lower()
+        for stu_ans in student_exam_result:
+            for q in question_info:
+                if stu_ans.question_id == q.id:
+                    calling = fun_dict_map.get(q.type)
+                    res = calling(q.answer, stu_ans.solution, q.score)
+                    if res:
+                        stu_grade += q.score
+                        q_score.append({"id": stu_ans.id, "mark": q.score})
+        return stu_grade, q_score

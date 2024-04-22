@@ -6,26 +6,24 @@
 # @Software: PyCharm
 from datetime import datetime
 from pydantic import BaseModel, constr
+from typing import Text
 
 
 class CreateDocument(BaseModel):
-    id: str
     url: str
     name: str
-    user_id: str
     document_type: str
-    publish: int = None
-    confidential_business: int = None
+    user_id: str = None
+    record: Text = None
 
 
 class BuckCreateDocument(BaseModel):
     id: str
     name: str
-    user_id: str
+    user_id: str = None
     url: str
     document_type: str
-    publish: int = None
-    confidential_business: int = None
+    record: Text = None
 
 
 class UpdateDocument(BaseModel):
@@ -33,16 +31,20 @@ class UpdateDocument(BaseModel):
     url: str = None
     user_id: str = None
     document_type: str = None
-    publish: int = None
-    confidential_business: int = None
 
 
 class DeleteDocument(BaseModel):
     id: constr(min_length=32, max_length=36)
 
 
-class DocumentSchemas(CreateDocument):
+class DocumentSchemas(BaseModel):
     id: str
+    url: str
+    name: str
+    document_type: str
+    user_id: str = None
+    table_code: str = None
+    col_name: str = None
     create_time: datetime
     update_time: datetime
 

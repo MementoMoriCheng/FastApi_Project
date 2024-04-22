@@ -96,17 +96,26 @@ class SqlHandle(object):
             rows = result.fetchall()
             return rows
 
-    async def insert(self, table_name, data):
+    async def insert_only(self, table_name, data):
         try:
             with self.get_sync_session() as session:
                 table = self._get_table(table_name)
                 insert_statement = table.insert().values(**data)
                 session.execute(insert_statement)
                 session.commit()
+
         except SQLAlchemyError as e:
             logger.error(f"Insertion error for table {table_name}: {e}")
             session.rollback()
-            return
+            raise e
+
+    async def insert(self, table_name, data):
+        try:
+            await self.insert_only(table_name, data)
+            inserted_data_id = await self.select(table_name, conditions=data, fields=['id'])
+            return inserted_data_id
+        except SQLAlchemyError as e:
+            raise e
 
     async def update(self, table_name, conditions, updated_data):
         try:
@@ -123,7 +132,7 @@ class SqlHandle(object):
         except SQLAlchemyError as e:
             logger.error(f"Update error for table {table_name}: {e}")
             session.rollback()
-            return
+            raise e
 
     async def delete(self, table_name, conditions):
         try:
@@ -178,8 +187,10 @@ class SqlHandle(object):
                         column = getattr(table.c, field)
                         stmt = stmt.order_by(column.desc() if direction else column)
 
-                if limit is not None and offset is not None:
-                    stmt = stmt.limit(limit).offset(offset)
+                if offset:
+                    stmt = stmt.offset(offset)
+                if limit:
+                    stmt = stmt.limit(limit)
 
                 results = session.execute(stmt)
                 column_names = results.keys()
@@ -351,14 +362,13 @@ class SqlHandle(object):
         """
         if table_name == "log_manage":
             LOG_RECORDS.update(records)
-            res = await self.insert(table_name, LOG_RECORDS)
+            res = await self.insert_only(table_name, LOG_RECORDS)
         else:
             GNSS_RECORDS.update(records)
-            res = await self.insert(table_name, GNSS_RECORDS)
+            res = await self.insert_only(table_name, GNSS_RECORDS)
         if not res:
             return False
         return True
 
 
 sql_handle = SqlHandle()
-

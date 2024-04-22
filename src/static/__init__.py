@@ -39,7 +39,8 @@ column_type = {
     "bool": "Boolean",
     "varchar": "Varchar(32)",
     "float": "Float",
-    "file": "Text"
+    "file": "Text",
+    "time": "DateTime"
 }
 
 

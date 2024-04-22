@@ -26,8 +26,8 @@ api_router.include_router(sql_manage.router, tags=['SqlManage'], prefix='/sql_ma
 api_router.include_router(flying_service.router, tags=['FlyingService'], prefix='/flying_service')
 api_router.include_router(menu_manage.router, tags=['MenuManage'], prefix='/menu_manage')
 api_router.include_router(document.router, tags=['Document'], prefix='/document')
-api_router.include_router(teaching_resources_manage.router, tags=['TeachingResourcesManage'],
-                          prefix='/teaching_resources_manage')
-api_router.include_router(exam_manage.router, tags=['ExaminationManage'], prefix='/exam_manage')
 api_router.include_router(log_manage.router, tags=['LogManage'], prefix='/log_manage')
-api_router.include_router(log_manage.router, tags=['FlightSafetyMonitoring'], prefix='/flight_safety_monitoring')
+api_router.include_router(flight_safety_monitoring.router, tags=['FlightSafetyMonitoring'],
+                          prefix='/flight_safety_monitoring')
+api_router.include_router(teaching_resources_manage.router)
+api_router.include_router(exam_manage.router)

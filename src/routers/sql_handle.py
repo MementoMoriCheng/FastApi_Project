@@ -10,11 +10,12 @@ from src.config.setting import settings
 from src.utils.sql_config import sql_handle
 from src.utils.dependencies import DALGetter
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.exc import SQLAlchemyError
 from src.db.models import TableManage, ColumnManage
 from src.db.schemas.table_manage import UserSyncIn
 from src.utils.logger import logger, generate_mysql_log_data
 from src.utils.generate_file import generate_pdf, generate_excel
-from src.utils.responses import resp_200, resp_404, fetch_external_data
+from src.utils.responses import resp_200, resp_404, fetch_external_data, resp_400
 from src.utils.constant import RESERVE, SON, RecordsStatusCode
 
 router = APIRouter()
@@ -123,16 +124,17 @@ async def create_table_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     res = await dal.get_by(code=code)
     if not res:
         return resp_404("未能获取到表信息")
-    insert_data = obj_in
     table_name = f"auto_{res.code}"
-    await sql_handle.insert(table_name, insert_data)
-
+    try:
+        inserted_data_id = await sql_handle.insert(table_name, obj_in)
+    except SQLAlchemyError as e:
+        return resp_400(msg=f"{e}")
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=code,
                                              handle_user="", handle_params=obj_in,
                                              entity_id=res.id, handle_reason='通过表名创建一条数据')
     await sql_handle.add_records("log_manage", mysql_log_data)
 
-    return resp_200()
+    return resp_200(data=inserted_data_id[0])
 
 
 @router.patch('/{code}/{id_}', tags=['SqlHandle'], summary="通过表名修改数据")
@@ -145,7 +147,10 @@ async def get_column_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, cod
     update_conditions = {"id": id_}
     updated_data = obj_in
     table_name = f"auto_{res.code}"
-    await sql_handle.update(table_name, update_conditions, updated_data)
+    try:
+        await sql_handle.update(table_name, update_conditions, updated_data)
+    except SQLAlchemyError as e:
+        return resp_400(msg=f"{e}")
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=code,
                                              handle_user="", handle_params=obj_in,

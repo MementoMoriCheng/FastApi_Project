@@ -18,6 +18,7 @@ class CreateTableManage(BaseModel):
     name: str
     description: str = None
     create_user: str
+    update_user: str = None
     menu_id: str = None
     is_delete: bool = False
 

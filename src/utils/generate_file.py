@@ -176,83 +176,112 @@ from src.utils.sql_config import sql_handle
 
 
 class Question:
-    def __init__(self, id, question_text, options, answer):
-        self.id = id
+    def __init__(self, question_id, question_text, answer, question_type, options=None):
+        self.question_id = question_id
         self.question_text = question_text
         self.options = options
         self.answer = answer
+        self.question_type = question_type
 
 
 class ExamPaperGenerator:
-    def __init__(self, table_name, single_choice=10, multiple_choice=5, fill=4, judge=5, short_answer=5):
+    def __init__(self, table_name):
         self.table_name = table_name
-        self.single_choice = single_choice
-        self.multiple_choice = multiple_choice
-        self.fill = fill
-        self.judge = judge
-        self.short_answer = short_answer
 
-    def load_single_choice_bank(self):
-        single_choices = self.load_question_bank(QuestionType.SingleChoice)
-        # question_bank = []
-        # for row in rows:
+    async def load_single_choice_bank(self):
+        single_choices = await self.load_question_bank(QuestionType.SingleChoice)
+        question_bank = []
+        for row in single_choices:
+            question_id = row.get('id')
+            question_text = row.get('question')
+            options = row.get('options')
+            answer = row.get('answer')
+            question_type = row.get('type')
+            question = Question(question_id, question_text, answer, question_type, options)
+            question_bank.append(question)
+        return question_bank
 
-        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
-        #     options = [option_a, option_b, option_c, option_d]
-        #     question = Question(id, question_text, options, answer)
-        #     question_bank.append(question)
-        # return question_bank
+    async def load_multiple_choice_bank(self):
+        multiple_choices = await self.load_question_bank(QuestionType.MultipleChoice)
+        question_bank = []
+        for row in multiple_choices:
+            question_id = row.get('id')
+            question_text = row.get('question')
+            options = row.get('options')
+            answer = row.get('answer')
+            question_type = row.get('type')
+            question = Question(question_id, question_text, answer, question_type, options)
+            question_bank.append(question)
+        return question_bank
 
-    def load_multiple_choice_bank(self):
-        multiple_choices = self.load_question_bank(QuestionType.MultipleChoice)
-        # question_bank = []
-        # for row in rows:
-        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
-        #     options = [option_a, option_b, option_c, option_d]
-        #     question = Question(id, question_text, options, answer)
-        #     question_bank.append(question)
-        # return question_bank
+    async def load_fill_bank(self):
+        fills = await self.load_question_bank(QuestionType.Fill)
+        question_bank = []
+        for row in fills:
+            question_id = row.get('id')
+            question_text = row.get('question')
+            answer = row.get('answer')
+            question_type = row.get('type')
+            question = Question(question_id, question_text, answer, question_type)
+            question_bank.append(question)
+        return question_bank
 
-    def load_fill_choice_bank(self):
-        fill = self.load_question_bank(QuestionType.Fill)
-        # question_bank = []
-        # for row in rows:
-        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
-        #     options = [option_a, option_b, option_c, option_d]
-        #     question = Question(id, question_text, options, answer)
-        #     question_bank.append(question)
-        # return question_bank
+    async def load_judge_bank(self):
+        judges = await self.load_question_bank(QuestionType.Judge)
+        question_bank = []
+        for row in judges:
+            question_id = row.get('id')
+            question_text = row.get('question')
+            options = row.get('options')
+            answer = row.get('answer')
+            question_type = row.get('type')
+            question = Question(question_id, question_text, answer, question_type, options)
+            question_bank.append(question)
+        return question_bank
 
-    def load_judge_bank(self):
-        judge = self.load_question_bank(QuestionType.Judge)
-        # question_bank = []
-        # for row in rows:
-        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
-        #     options = [option_a, option_b, option_c, option_d]
-        #     question = Question(id, question_text, options, answer)
-        #     question_bank.append(question)
-        # return question_bank
+    async def load_short_answer_bank(self):
+        short_answers = await self.load_question_bank(QuestionType.ShortAnswer)
+        question_bank = []
+        for row in short_answers:
+            question_id = row.get('id')
+            question_text = row.get('question')
+            answer = row.get('answer')
+            question_type = row.get('type')
+            question = Question(question_id, question_text, answer, question_type)
+            question_bank.append(question)
+        return question_bank
 
-    def load_short_answer_bank(self):
-        short_answer = self.load_question_bank(QuestionType.ShortAnswer)
-        # question_bank = []
-        # for row in rows:
-        #     (id, question_text, option_a, option_b, option_c, option_d, answer) = row
-        #     options = [option_a, option_b, option_c, option_d]
-        #     question = Question(id, question_text, options, answer)
-        #     question_bank.append(question)
-        # return question_bank
-
-    async def load_question_bank(self, question_type, is_desc=True, limit=100):
+    async def load_question_bank(self, question_type, limit=100, is_desc=True):
         # desc 降序
         question_bank = await sql_handle.select(self.table_name, conditions={"type": question_type},
                                                 order_by={"update_time": is_desc}, limit=limit)
         return question_bank
 
-    def generate_exam(self, num_questions):
-        question_bank = self.load_question_bank()
-        random.shuffle(question_bank)
-        return question_bank[:num_questions]
+    async def generate_exam(self, question_type_counts):
+        exam_questions = []
+        for question_type, question_num in question_type_counts.items():
+            if question_type == "single_choice":
+                single_choice_bank = await self.load_single_choice_bank()
+                random.shuffle(single_choice_bank)
+                exam_questions.extend(single_choice_bank[:question_num])
+            if question_type == "multiple_choice":
+                multiple_choice_bank = await self.load_multiple_choice_bank()
+                random.shuffle(multiple_choice_bank)
+                exam_questions.extend(multiple_choice_bank[:question_num])
+            if question_type == "fill":
+                fill_bank = await self.load_fill_bank()
+                random.shuffle(fill_bank)
+                exam_questions.extend(fill_bank[:question_num])
+            if question_type == "judge":
+                judge_bank = await self.load_judge_bank()
+                random.shuffle(judge_bank)
+                exam_questions.extend(judge_bank[:question_num])
+            if question_type == "short_answer":
+                short_answer_bank = await self.load_short_answer_bank()
+                random.shuffle(short_answer_bank)
+                exam_questions.extend(short_answer_bank[:question_num])
+
+        return exam_questions
 
     def print_exam(self, exam):
         for i, question in enumerate(exam, start=1):
@@ -281,4 +310,9 @@ if __name__ == '__main__':
     import asyncio
 
     eg = ExamPaperGenerator("questions")
-    asyncio.run(eg.load_question_bank(1, False))
+    # asyncio.run(eg.load_question_bank(1, 5))
+    asyncio.run(eg.load_single_choice_bank())
+
+    question_type = {'fill': 5, 'judge': 5, 'multiple_choice': 5, 'short_answer': 5, 'single_choice': 10}
+    exam_paper_info = asyncio.run(eg.generate_exam(question_type))
+    print(exam_paper_info)

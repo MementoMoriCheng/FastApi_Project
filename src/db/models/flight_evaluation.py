@@ -11,6 +11,9 @@ from sqlalchemy import Column, String, DateTime, func, Float, Integer, Enum, tex
 
 
 class BaseAction(Base):
+    """
+    基础动作表
+    """
     __tablename__ = 'base_actions'
     id = Column(String(36), primary_key=True, default=generate_uuid)
     course_id = Column(String(36), nullable=False, comment="关联课程ID")
@@ -23,6 +26,10 @@ class BaseAction(Base):
 
 
 class EvaluationCriteria(Base):
+    """
+    飞行评估标准表
+    """
+
     __tablename__ = 'evaluation_criteria'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -46,6 +53,9 @@ class EvaluationCriteria(Base):
 
 
 class FlightEvaluationBase(Base):
+    """
+    飞行评估基础表
+    """
     __tablename__ = 'flight_evaluation_base'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -68,6 +78,9 @@ class FlightEvaluationBase(Base):
 
 
 class FlightParameter(Base):
+    """
+    飞行参数表
+    """
     __tablename__ = 'flight_parameter'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -89,6 +102,9 @@ class FlightParameter(Base):
 
 
 class FlightEvaluationResult(Base):
+    """
+    飞行评估结果表
+    """
     __tablename__ = 'flight_evaluation_result'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)

@@ -8,7 +8,7 @@
 # fields.Field(...) 表示此项为必填项
 # None 表示可填可不填，不填则为None
 
-from typing import Union, List
+from typing import Union, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, fields
 
@@ -81,6 +81,8 @@ class ColumnListSchema(BaseModel):
     status: int = None
     is_parent: bool = None
     is_encrypt: bool = None
+    primary: bool = None
+    association: Optional[List] = None
 
     class Config:
         orm_mode = True

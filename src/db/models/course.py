@@ -4,65 +4,84 @@
 # @Author  : MementoMori
 # @File    : course.py
 # @Software: PyCharm
+from sqlalchemy.orm import relationship
+
 from src.db.config import Base
-from sqlalchemy import Column, String, DateTime, func, Integer, text, Text
+from sqlalchemy import Column, String, DateTime, func, Integer, text, Text, ForeignKey, Date
 from src.utils import generate_uuid
 
 
-class Course(Base):
-    __tablename__ = 'course'
+class CourseChapter(Base):
+    """
+    教学章节管理表
+    """
+    __tablename__ = 'course_chapter'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    course_name = Column(Text(), comment="课程")
-    course_chapter = Column(Text(), comment="章节")
+    parent_id = Column(String(36), ForeignKey("course_chapter.id"), comment="父章节, 自关联")
+
+    type = Column(Integer, comment="1课程、2资源")
+    course_name = Column(Text(), comment="课程名称/教学资源名称")
+    course_chapter = Column(Text(), comment="章节名称/教学资源名称")
+    serial_number = Column(String(32), comment="章节编号")
     knowledge_points = Column(Text(), comment="知识点")
     learning_hours = Column(Integer, default=1, comment="学时")
-    serial_number = Column(String(32), comment="编号")
-
-    teacher = Column(String(32), comment="讲师")
-    degree = Column(Integer, default=1, comment="课程难度 (0, '初级'), (1, '中级'), (2, '高级')")
-    students = Column(Integer, comment="学习人数")
-    category = Column(Integer, comment="课程类别")
-    is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
-    status = Column(Integer, comment="状态")
-    section_type = Column(Integer,
-                          comment="资源文件内容(0, '文档HTML、PDF等'), (1, '图片JPG、PNG、GIF'), (2, '视频MP4、WMV等')")
-    section_url = Column(String(255), unique=True, comment="资源链接")
     create_time = Column(DateTime, server_default=func.now())
     update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+
+    course_source = relationship("CourseSource", back_populates="course_chapter", lazy="select")
+    questions = relationship("Questions", back_populates="course_chapter", lazy="select")
+
+    parent = relationship("CourseChapter", remote_side=[id], backref='children')
+    is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
 
     __mapper_args__ = {"eager_defaults": True}
 
 
-class CourseChapter(Base):
-    __tablename__ = 'course_chapter'
+class CourseSource(Base):
+    """
+    教学资源管理表
+    """
+    __tablename__ = 'course_source'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    course_id = Column(String(36), comment="课程ID")
-
-    course_name = Column(Text(), comment="课程")
-    course_chapter = Column(Text(), comment="章节")
-    sub_course_chapter = Column(Text(), comment="子章节")
+    course_chapter_id = Column(
+        String(36),
+        ForeignKey("course_chapter.id", ondelete="CASCADE"),
+        nullable=False, comment="课程名称/教学资源id")
+    file_id = Column(String(36), comment="文档id", default=" ")
+    description = Column(Text(), comment="资源描述信息")
+    is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
+    status = Column(Integer, comment="状态", default=1)
     create_time = Column(DateTime, server_default=func.now())
     update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+
+    course_chapter = relationship("CourseChapter", back_populates="course_source", lazy="select")
+    online_learning_record = relationship("OnlineLearningRecord", back_populates="course_source", lazy="select")
 
     __mapper_args__ = {"eager_defaults": True}
 
 
 class CourseSchedule(Base):
+    """
+    课程表
+    """
     __tablename__ = 'course_schedule'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    course_date = Column(DateTime, comment="日期")
-    time_periods = Column(DateTime, comment="节次")
+    course_date = Column(Date, comment="日期")
+    course_sequence = Column(Integer, comment="节次")
 
     classroom = Column(String(32), comment="教室")
     course_name = Column(String(32), comment="课程")
     teacher = Column(String(32), comment="讲师")
-    classes = Column(String(32), comment="班级")
+    classes = Column(String(32), comment="期班")
     students_num = Column(Integer, comment="学习人数")
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
     status = Column(Integer, comment="状态")
+
+    course_start = Column(DateTime, nullable=False, comment="课程开始时间")
+    course_end = Column(DateTime, nullable=False, comment="课程结束时间")
 
     notes = Column(Text(), comment="备注")
 
@@ -73,11 +92,14 @@ class CourseSchedule(Base):
 
 
 class TeachingJournal(Base):
+    """
+    教学日志表
+    """
     __tablename__ = 'teaching_journal'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    course_date = Column(DateTime, comment="日期")
-    time_periods = Column(DateTime, comment="节次")
+    course_date = Column(Date, comment="日期")
+    course_sequence = Column(Integer, comment="节次")
 
     classroom = Column(String(32), comment="教室")
     course_name = Column(String(32), comment="课程")
@@ -89,7 +111,35 @@ class TeachingJournal(Base):
 
     notes = Column(Text(), comment="备注")
 
+    course_start = Column(DateTime, nullable=False, comment="课程开始时间")
+    course_end = Column(DateTime, nullable=False, comment="课程结束时间")
+
     create_time = Column(DateTime, server_default=func.now())
     update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+
+    __mapper_args__ = {"eager_defaults": True}
+
+
+class OnlineLearningRecord(Base):
+    """
+    在线学习记录表
+    """
+    __tablename__ = 'online_learning_record'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    student_id = Column(String(36), comment="学生ID")
+    course_source_id = Column(
+        String(36),
+        ForeignKey("course_source.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="课程名称/教学资源id")
+    start_time = Column(DateTime, comment="学生开始学习的时间")
+    end_time = Column(DateTime, comment="学生结束学习的时间")
+    Keep_time = Column(Integer, comment="学习时长，单位秒")
+    create_time = Column(DateTime, server_default=func.now())
+    update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
+
+    course_source = relationship("CourseSource", back_populates="online_learning_record", lazy="select")
+    is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
 
     __mapper_args__ = {"eager_defaults": True}
