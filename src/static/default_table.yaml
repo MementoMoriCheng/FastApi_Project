@@ -1,0 +1,42 @@
+state_registration:
+  rank:
+      col_type: int
+      col_length: null
+      col_nullable: true
+      col_primary_key: false
+  level:
+      col_type: int
+      col_length: null
+      col_nullable: true
+      col_primary_key: false
+  state:
+      col_type: nvarchar
+      col_length: 100
+      col_nullable: false
+      col_primary_key: true
+  state_name:
+      col_type: nvarchar
+      col_length: 48
+      col_nullable: false
+      col_primary_key: false
+  superiors:
+      col_type: nvarchar
+      col_length: 100
+      col_nullable: true
+      col_primary_key: false
+  for_short:
+      col_type: nvarchar
+      col_length: 48
+      col_nullable: false
+      col_primary_key: false
+  description:
+      col_type: nvarchar
+      col_length: 64
+      col_nullable: true
+      col_primary_key: false
+  update_time:
+      col_type: datetime
+      col_length: null
+      col_nullable: false
+      col_primary_key: false
+

@@ -115,3 +115,4 @@ def register_event(app):
     @app.on_event("shutdown")
     async def shutdown_event():
         await u_s.stop()
+        w_s.stop_server()

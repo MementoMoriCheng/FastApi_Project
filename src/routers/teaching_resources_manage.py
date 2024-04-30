@@ -13,12 +13,14 @@ from src.utils.dependencies import DALGetter
 from src.utils.logger import logger, generate_mysql_log_data
 from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
 from src.utils.responses import resp_200, resp_404, resp_500, resp_400
-from src.db.models import CourseSource, CourseChapter, Questions, CourseSchedule, TeachingJournal, Document
+from src.db.models import CourseSource, CourseChapter, Questions, CourseSchedule, TeachingJournal, Document, \
+    OnlineLearningRecord
 from src.db.schemas.lesson_examination import (
     QuestionSchema, SearchQuestionSchema, ScheduleSchema, EditScheduleSchema,
     TeachingJournalSchema, EditTeachingJournalSchema,
     CourseChapterSchema, SearchCourseChapterSchema, CourseSourceSchema, EditCourseChapterSchema, CourseChapterID,
-    EditQuestionSchema, CourseSourceFile
+    EditQuestionSchema, CourseSourceFile, OnlineLearningRecordSchema, EditOnlineLearningRecordSchema,
+    ShowOnlineLearningRecord
 )
 
 router = APIRouter()
@@ -147,9 +149,9 @@ async def create_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL))
     if schedule_info.course_date:
         schedule_data.update({'course_date': schedule_info.course_date.strftime('%Y-%m-%d')})
     if schedule_info.course_start:
-        schedule_data.update({'course_start': schedule_info.course_start.strftime('%Y-%m-%d %H:%M:%SZ')})
+        schedule_data.update({'course_start': schedule_info.course_start.strftime('%Y-%m-%d %H:%M:%S')})
     if schedule_info.course_end:
-        schedule_data.update({'course_end': schedule_info.course_end.strftime('%Y-%m-%d %H:%M:%SZ')})
+        schedule_data.update({'course_end': schedule_info.course_end.strftime('%Y-%m-%d %H:%M:%S')})
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='course_schedule',
                                              handle_user='', handle_params=schedule_data,
                                              entity_id=res.id, handle_reason='创建课程表信息')
@@ -191,9 +193,9 @@ async def update_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL))
     if schedule_info.course_date:
         schedule_data.update({'course_date': schedule_info.course_date.strftime('%Y-%m-%d')})
     if schedule_info.course_start:
-        schedule_data.update({'course_start': schedule_info.course_start.strftime('%Y-%m-%d %H:%M:%SZ')})
+        schedule_data.update({'course_start': schedule_info.course_start.strftime('%Y-%m-%d %H:%M:%S')})
     if schedule_info.course_end:
-        schedule_data.update({'course_end': schedule_info.course_end.strftime('%Y-%m-%d %H:%M:%SZ')})
+        schedule_data.update({'course_end': schedule_info.course_end.strftime('%Y-%m-%d %H:%M:%S')})
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='course_schedule',
                                              handle_user='', handle_params=schedule_data,
@@ -254,7 +256,8 @@ async def create_teaching_journal_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)
     if teaching_journal_info.course_date:
         teaching_journal_data.update({'course_date': teaching_journal_info.course_date.strftime('%Y-%m-%d')})
     if teaching_journal_info.course_start:
-        teaching_journal_data.update({'course_start': teaching_journal_info.course_start.strftime('%Y-%m-%d %H:%M:%SZ')})
+        teaching_journal_data.update(
+            {'course_start': teaching_journal_info.course_start.strftime('%Y-%m-%d %H:%M:%SZ')})
     if teaching_journal_info.course_end:
         teaching_journal_data.update({'course_end': teaching_journal_info.course_end.strftime('%Y-%m-%d %H:%M:%SZ')})
 
@@ -452,4 +455,51 @@ async def delete_course_source_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), 
 
     return resp_200(data={'id': id_})
 
+
 # -----------------------------------------------在线学习信息
+
+@router.get('/online_learning_record/{student_id}/{course_chapter_id}', tags=['OnlineLearningRecord'],
+            summary="获取在线学习信息")
+async def get_online_learning_record_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, student_id: str,
+                                          course_chapter_id: str):
+    dal.setDb(OnlineLearningRecord)
+    res = await dal.get_by(student_id=student_id, course_chapter_id=course_chapter_id, is_delete=RESERVE)
+    if not res:
+        return resp_200(data=[], msg='在线学习信息不存在！')
+    data = ShowOnlineLearningRecord.from_orm(res)
+    return resp_200(data=data)
+
+
+@router.post("/online_learning_record", tags=["OnlineLearningRecord"], summary="创建在线学习信息")
+async def create_online_learning_record_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
+                                             source_info: OnlineLearningRecordSchema):
+    dal.setDb(OnlineLearningRecord)
+    repeat_res = await dal.get_by(student_id=source_info.student_id, course_chapter_id=source_info.course_chapter_id)
+    if repeat_res:
+        source_info.keep_time = repeat_res.keep_time + source_info.keep_time
+        res = await dal.update(repeat_res.id, source_info)
+        if not res:
+            return resp_500()
+        record_id = repeat_res.id
+    else:
+        res = await dal.create(source_info)
+        if not res:
+            return resp_400(msg='创建失败！')
+        record_id = res.id
+
+    return resp_200(data=record_id)
+
+
+@router.patch("/online_learning_record/{id_}", tags=["OnlineLearningRecord"], summary="编辑在线学习信息")
+async def update_online_learning_record_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str,
+                                             chapter_info: EditOnlineLearningRecordSchema):
+    dal.setDb(OnlineLearningRecord)
+    ms = await dal.get(id_)
+    if not ms:
+        return resp_404(msg='编辑失败！在线学习信息不存在，无法进行编辑！')
+    chapter_info.keep_time = ms.keep_time + chapter_info.keep_time
+    res = await dal.update(id_, chapter_info)
+    if not res:
+        return resp_500()
+
+    return resp_200(data=res, msg='编辑成功')

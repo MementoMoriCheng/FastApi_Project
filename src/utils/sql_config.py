@@ -4,13 +4,12 @@
 # @Author  : MementoMori
 # @File    : sql_handle.py
 # @Software: PyCharm
-import asyncio
 from src.config.setting import settings
 from sqlalchemy.exc import SQLAlchemyError
 from src.db.config import session
 from src.utils.logger import logger
 from src.static import column_type, update_column_type
-from sqlalchemy import (Column, Integer, MetaData, Table, text,
+from sqlalchemy import (Column, MetaData, Table, text, String,
                         PrimaryKeyConstraint, create_engine, and_, select)
 from sqlalchemy.orm import sessionmaker
 from src.utils.constant import LOG_RECORDS, GNSS_RECORDS
@@ -76,18 +75,24 @@ class SqlHandle(object):
             return column.is_(None)
         elif operator == "not_isEmpty":
             return column.isnot(None)
+        elif operator == "in":
+            if isinstance(operand, list) or isinstance(operand, tuple):
+                return column.in_(operand)
+            else:
+                logger.error(f"In operator requires a list or tuple operand, but got {type(operand)}")
+                raise ValueError(f"In operator requires a list or tuple operand, but got {type(operand)}")
         else:
             logger.error(f"Unsupported operator: {operator}")
             raise ValueError(f"Unsupported operator: {operator}")
 
-    async def get_col_type(self, table_name):
+    async def get_primary_key(self, table_name):
         get_col_sql = f"""SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE,
                             COLUMN_KEY, EXTRA FROM information_schema.columns WHERE 
-                            TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}'; """
+                            TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}' AND COLUMN_KEY = 'PRI'; """
         async with self.async_session_factory() as session_exc:
             result = await session_exc.execute(get_col_sql)
-            rows = result.fetchall()
-            return rows
+            primary_key_columns = result.fetchall()
+            return primary_key_columns
 
     async def get_table_info(self, table_name="column_manage"):
         create_table_sql = f'select * from {table_name};'
@@ -200,21 +205,24 @@ class SqlHandle(object):
             logger.error(f"Selection error for table {table_name}: {e}")
 
     @staticmethod
-    def create_column(column_name, column_type, primary_key=False):
+    def create_column(column_name, column_type, primary_key=False, nullable=True, unique=False):
         """
         定义一个方法用于动态创建列
         Args:
-            column_name:
-            column_type:
-            primary_key:
+            column_name: 列名
+            column_type: 列类型
+            primary_key: 是否为主键，默认为False
+            nullable: 是否允许为空，默认为True
+            unique: 是否唯一，默认为False
 
         Returns:
 
         """
-        if primary_key:
-            return Column(column_name, column_type, primary_key=True)
-        else:
-            return Column(column_name, column_type)
+        kwargs = {'primary_key': primary_key,
+                  'nullable': nullable,
+                  'unique': unique}
+
+        return Column(column_name, column_type, **kwargs)
 
     def create_dynamic_table_core(self, table_name, columns_config, primary_key_column=None):
         """
@@ -228,12 +236,12 @@ class SqlHandle(object):
 
         """
         try:
-            columns = [self.create_column(name, type_, name == primary_key_column) for name, type_ in
-                       columns_config.items()]
+            columns = [self.create_column(name, type_, name == primary_key_column) for
+                       name, type_ in columns_config.items()]
             if primary_key_column:
                 pk_constraint = PrimaryKeyConstraint(primary_key_column)
             else:
-                id_col = Column('id', Integer, primary_key=True)
+                id_col = Column('id', String(36), primary_key=True)
                 columns.append(id_col)
                 pk_constraint = PrimaryKeyConstraint('id')
 
@@ -283,11 +291,11 @@ class SqlHandle(object):
         except Exception as e:
             session.rollback()
             logger.error(f"Error occurred while upgrading columns: {str(e)}")
-            return
+            raise e
         finally:
             session.close()
 
-    def change_columns(self, table_name, old_column_name, obj_in):
+    async def change_columns(self, table_name, old_column_name, obj_in):
         """
         修改列
         Args:
@@ -299,34 +307,53 @@ class SqlHandle(object):
 
         """
         update_data = obj_in.dict(exclude_none=True)
-        new_column_name = update_data.get("name")
+        new_column_name = update_data.get("code")
         new_column_type = update_data.get("type")
         is_pk = update_data.get("primary")
         is_empty = update_data.get("empty")
         is_unique = update_data.get("unique")
+        varchar_len = update_data.get("field_length")
 
         column_name = new_column_name if new_column_name else old_column_name
 
-        is_empty_sql = f"ALTER TABLE {table_name} MODIFY {column_name} NOT NULL;"
-        unique_sql = f"ALTER TABLE {table_name} ADD UNIQUE ({column_name});"
-        pk_sql = f"ALTER TABLE {table_name} ADD PRIMARY KEY ({column_name});"
-        rename_sql = f"ALTER TABLE {table_name} RENAME COLUMN {old_column_name} TO {new_column_name};"
-        modify_sql = f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type};"
-
         if new_column_type:
+            modify_sql = f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type}({varchar_len});" if varchar_len \
+                else f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type};"
             self.execute_stmt(modify_sql)
         if new_column_name:
+            rename_sql = f"ALTER TABLE {table_name} RENAME COLUMN {old_column_name} TO {new_column_name};"
             self.execute_stmt(rename_sql)
         if is_pk:
+            pk_info = await self.get_primary_key(table_name)
+            pk_name, pk_type, pk_length = pk_info[0][0], pk_info[0][1], pk_info[0][2]
+            pk_sql = f"ALTER TABLE {table_name} ADD PRIMARY KEY ({column_name});"
+            drop_pk_sql = f"ALTER TABLE {table_name} DROP PRIMARY KEY;"
+            drop_pk_increment_sql = f"ALTER TABLE {table_name} MODIFY COLUMN {pk_name} {pk_type} ({pk_length});" \
+                if pk_length else f"ALTER TABLE {table_name} MODIFY COLUMN {pk_name} {pk_type};"
+            self.execute_stmt(drop_pk_increment_sql)
+            self.execute_stmt(drop_pk_sql)
             self.execute_stmt(pk_sql)
-        if is_empty:
+            self.execute_stmt(drop_pk_increment_sql)
+        if not is_empty:
+            is_empty_sql = f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type}({varchar_len}) NOT NULL;" \
+                if varchar_len else f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type} NOT NULL;"
             self.execute_stmt(is_empty_sql)
+        if is_empty:
+            empty_sql = f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type}({varchar_len}) NULL;" \
+                if varchar_len else f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type} NULL;"
+            self.execute_stmt(empty_sql)
         if is_unique:
+            unique_sql = f"ALTER TABLE {table_name} ADD UNIQUE ({column_name});"
             self.execute_stmt(unique_sql)
 
     def add_foreign_key(self, main_table_name, main_column, association):
-        relative_column = "id"
-        for relative_table_name in association:
+        for relative_table_info in association:
+            relative_table_name = "auto_" + relative_table_info.get("tableCode")
+            if main_table_name == relative_table_name:
+                continue
+            relative_column = 'id'
+            add_index_sql = f"ALTER TABLE {relative_table_name} ADD INDEX ({relative_column});"
+            self.execute_stmt(add_index_sql)
             add_foreign_key_sql = f"ALTER TABLE {main_table_name} ADD FOREIGN KEY ({main_column}) REFERENCES {relative_table_name} ({relative_column});"
             self.execute_stmt(add_foreign_key_sql)
 
@@ -340,7 +367,7 @@ class SqlHandle(object):
             session.rollback()
             logger.error(f"Error occurred while execute : {sql_stmt}"
                          f"Error : {str(e)}")
-            return
+            raise e
         finally:
             session.close()
 
@@ -360,15 +387,15 @@ class SqlHandle(object):
         Returns:
 
         """
-        if table_name == "log_manage":
-            LOG_RECORDS.update(records)
-            res = await self.insert_only(table_name, LOG_RECORDS)
-        else:
-            GNSS_RECORDS.update(records)
-            res = await self.insert_only(table_name, GNSS_RECORDS)
-        if not res:
-            return False
-        return True
+        try:
+            if table_name == "log_manage":
+                LOG_RECORDS.update(records)
+                await self.insert_only(table_name, LOG_RECORDS)
+            else:
+                GNSS_RECORDS.update(records)
+                await self.insert_only(table_name, GNSS_RECORDS)
+        except Exception as e:
+            logger.error(f"{e}")
 
 
 sql_handle = SqlHandle()

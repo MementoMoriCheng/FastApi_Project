@@ -8,11 +8,11 @@
 from src.db.dals import ExecDAL
 from src.utils.logger import logger, generate_mysql_log_data
 from src.db.models import ColumnManage, TableManage
-from src.utils.responses import resp_200, resp_404, resp_500, resp_406
+from src.utils.responses import resp_200, resp_404, resp_500, resp_406, resp_400
 from fastapi import APIRouter, Depends
 from src.utils.dependencies import DALGetter
 from src.utils.sql_config import sql_handle
-from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
+from src.utils.constant import DELETE, RESERVE, RecordsStatusCode, COLUMN_LENGTH
 from src.db.schemas.column_manage import (
     CreateColumnManage, ColumnManageSchema, UpdateColumnManage, ColumnListSchema, SortColumnManage
 )
@@ -69,15 +69,23 @@ async def create_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     table_res = await table_dal.get(obj_in.table_id)
     if not table_res:
         return resp_404()
+
     table_code = f"auto_{table_res.code}"
+    if not obj_in.is_parent:
+        try:
+            if obj_in.association:
+                obj_in.field_length = COLUMN_LENGTH
+            sql_handle.upgrade_columns(table_code, obj_in.code, obj_in.type, obj_in.field_length)
+            await sql_handle.change_columns(table_code, obj_in.code, obj_in)
+            sql_handle.add_foreign_key(table_code, obj_in.code, obj_in.association)
+            sql_handle.refresh_metadata()
+        except Exception as e:
+            return resp_400(msg=str(e))
+
     dal.setDb(ColumnManage)
     res = await dal.create(obj_in)
     if not res:
         return resp_404()
-    if not obj_in.is_parent:
-        sql_handle.upgrade_columns(table_code, obj_in.code, obj_in.type, obj_in.field_length)
-        sql_handle.add_foreign_key(table_code, obj_in.code, obj_in.association)
-        sql_handle.refresh_metadata()
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),
@@ -88,12 +96,25 @@ async def create_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
 
 
 @router.delete("/{id_}", tags=["ColumnManage"], summary="删除数据库表的列")
-async def delete_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
+async def delete_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                        table_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                        *, id_: str):
     dal.setDb(ColumnManage)
     logger.info(f"删除数据库表的列:{id_}")
     ms = await dal.get(id_)
     if not ms:
         return resp_404()
+    table_dal.setDb(TableManage)
+    ts = await table_dal.get(ms.table_id)
+    if not ms:
+        return resp_404()
+    obj_in = UpdateColumnManage()
+    obj_in.empty = True
+    obj_in.type = ms.type
+    obj_in.field_length = ms.field_length
+    table_name = f"auto_{ts.code}"
+    await sql_handle.change_columns(table_name, ms.code, obj_in)
+
     res = await dal.update(id_, {'is_delete': DELETE})
     if not res:
         return resp_500()
@@ -126,7 +147,7 @@ async def update_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
 
     res = await dal.update(id_, obj_in)
     table_code = f"auto_{table_res.code}"
-    sql_handle.change_columns(table_code, old_column_name, obj_in)
+    await sql_handle.change_columns(table_code, old_column_name, obj_in)
     sql_handle.add_foreign_key(table_code, ms.code, obj_in.association)
     sql_handle.refresh_metadata()
     if not res:

@@ -18,6 +18,7 @@ class SearchExaminationSchema(BaseModel):
 
 
 class ExaminationSchema(BaseModel):
+    id: str
     name: str = None
     paper_id: str = None
     description: str = None
@@ -33,13 +34,62 @@ class ExaminationSchema(BaseModel):
         orm_mode = True
 
 
+class EditExaminationSchema(BaseModel):
+    name: str = None
+    paper_id: str = None
+    description: str = None
+    exam_date: Union[date, None]
+    start_time: Union[datetime, None]
+    end_time: Union[datetime, None]
+    major: str = None
+    tips: str = None
+    is_published: int = 0
+    total_time: int = 0
+
+
+# -----------考试成绩统计
+class ScoreStatisticsSchema(BaseModel):
+    id: str
+    name: str = None
+    major: str = None
+    student_num: int = 0
+
+    highest_score: float = 0
+    lowest_score: float = 0
+    average_score: float = 0
+
+    ideal_percentage: float = 0
+    good_percentage: float = 0
+    pass_percentage: float = 0
+    flunk_percentage: float = 0
+
+    remarks: str = None
+
+    class Config:
+        orm_mode = True
+
+
+class EditScoreStatisticsSchema(BaseModel):
+    name: str = None
+    major: str = None
+    student_num: int = 0
+
+    highest_score: float = 0
+    lowest_score: float = 0
+    average_score: float = 0
+
+    ideal_percentage: float = 0
+    good_percentage: float = 0
+    pass_percentage: float = 0
+    flunk_percentage: float = 0
+
+
 # -----------考试结果信息
 class ExamResultSchema(BaseModel):
+    id: str
     student_id: str
     exam_id: str
     total_score: int
-    start_time: Union[datetime, None]
-    end_time: Union[datetime, None]
 
     class Config:
         orm_mode = True
@@ -47,12 +97,12 @@ class ExamResultSchema(BaseModel):
 
 class EditExamResultSchema(BaseModel):
     exam_id: str
-    student_id: List[str]
+    student_id: str
 
 
 class QueryExamResultSchema(BaseModel):
-    student_id: str = None
-    exam_id: str = None
+    name: str = None
+    major: str = None
 
 
 class UpdateExamResultSchema(BaseModel):
@@ -94,7 +144,7 @@ class StudentIn(BaseModel):
     multiple_choice: int = 1
     fill: int = 1
     judge: int = 1
-    short_answer: int = 1
+    short: int = 1
 
 
 # -----------考试结果详情信息
@@ -116,7 +166,7 @@ class EditExamResultDetailSchema(BaseModel):
 
 # -----------试卷信息
 class SearchPaperSchema(BaseModel):
-    name: str
+    name: str = None
 
 
 class PaperSchema(BaseModel):
@@ -166,10 +216,7 @@ class CreatePaperQuestionSchema(BaseModel):
     short_answer: int = 5
     # --------基本信息
     paper_id: str = None
-    question_id: str = None
-    sequence_number: int = 1
-    mark: int = 0
-    module: str = None
+    course_chapter_id: List[str] = []
 
 
 # -----------试题信息
@@ -259,7 +306,7 @@ class TeachingJournalSchema(BaseModel):
 
 
 class EditTeachingJournalSchema(BaseModel):
-    course_date: Union[datetime, None]
+    course_date: Union[date, None]
     course_sequence: int = 1
     course_start: Union[datetime, None]
     course_end: Union[datetime, None]
@@ -321,7 +368,28 @@ class CourseSourceSchema(BaseModel):
 
 
 class CourseSourceFile(CourseSourceSchema):
+    id: str
     file_name: str = None
 
     class Config:
         orm_mode = True
+
+
+# -----------在线学习记录信息
+class OnlineLearningRecordSchema(BaseModel):
+    student_id: str = None
+    course_chapter_id: str = None
+    start_time: Union[datetime, None]
+    end_time: Union[datetime, None]
+    keep_time: int = 0
+
+
+class ShowOnlineLearningRecord(OnlineLearningRecordSchema):
+    id: str = None
+
+    class Config:
+        orm_mode = True
+
+
+class EditOnlineLearningRecordSchema(BaseModel):
+    keep_time: int = 0

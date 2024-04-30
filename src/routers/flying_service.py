@@ -37,8 +37,7 @@ async def get_flying_service_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
 @router.post('/search', tags=['FlyingService'], summary="获取所有飞行计划的信息")
 async def list_flying_service_info(
         dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
-        input_data: SearchFlyingPlan
-):
+        input_data: SearchFlyingPlan):
     dal.setDb(FlyingService)
 
     res = await dal.search(query=input_data)

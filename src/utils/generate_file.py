@@ -7,13 +7,48 @@
 
 import os
 import random
-from pprint import pprint
+import yaml
+from yaml.error import YAMLError
 import pandas as pd
 from fpdf import FPDF
+from src.utils.logger import logger
 from openpyxl import Workbook
 import matplotlib.pyplot as plt
-from src.utils.constant import QuestionType, QuestionLevel
+from src.utils.constant import QuestionType
 import xml.etree.ElementTree as ET
+from src.utils.sql_config import sql_handle
+from src.static import base_table_schema, column_type
+
+
+def load_default_table_from_conf(conf_file, table_name):
+    """
+    加载默认表，只支持yaml格式
+    Args:
+        conf_file: 配置文件路径
+        table_name: 表名
+
+    Returns:
+
+    """
+    try:
+        with open(conf_file, "r") as f:
+            content = yaml.safe_load(f)
+    except IOError:
+        logger.exception("conf file %s not exist", conf_file)
+        return
+    except YAMLError:
+        logger.exception("illegal conf file format")
+        return
+
+    elements = content.get(table_name, {})
+    logger.debug("table name \"%s\" conf: %s", table_name, elements)
+    for name in elements:
+        col_type = column_type.get(elements[name].get("col_type"))
+        col_length = column_type.get(elements[name].get("col_length"))
+        col_nullable = column_type.get(elements[name].get("col_nullable"))
+        col_primary_key = column_type.get(elements[name].get("col_primary_key"))
+        base_table_schema.update()
+    sql_handle.create_dynamic_table_core(table_name, columns_config, )
 
 
 def generate_xml_from_query(results, table_name):
@@ -172,7 +207,7 @@ class Plotter:
         plt.show()
 
 
-from src.utils.sql_config import sql_handle
+
 
 
 class Question:
@@ -187,6 +222,7 @@ class Question:
 class ExamPaperGenerator:
     def __init__(self, table_name):
         self.table_name = table_name
+        self.chapter = None
 
     async def load_single_choice_bank(self):
         single_choices = await self.load_question_bank(QuestionType.SingleChoice)
@@ -252,12 +288,17 @@ class ExamPaperGenerator:
         return question_bank
 
     async def load_question_bank(self, question_type, limit=100, is_desc=True):
+        conditions = {"type": question_type}
+        # 试题范围
+        if self.chapter:
+            conditions.update(course_chapter_id={"value": self.chapter, "operator": "in"})
         # desc 降序
-        question_bank = await sql_handle.select(self.table_name, conditions={"type": question_type},
+        question_bank = await sql_handle.select(self.table_name, conditions=conditions,
                                                 order_by={"update_time": is_desc}, limit=limit)
         return question_bank
 
-    async def generate_exam(self, question_type_counts):
+    async def generate_exam(self, question_type_counts, chapter):
+        self.chapter = chapter
         exam_questions = []
         for question_type, question_num in question_type_counts.items():
             if question_type == "single_choice":
@@ -283,13 +324,6 @@ class ExamPaperGenerator:
 
         return exam_questions
 
-    def print_exam(self, exam):
-        for i, question in enumerate(exam, start=1):
-            print(f"Question {i}: {question.question_text}")
-            for j, option in enumerate(question.options, start=1):
-                print(f"{chr(65 + j - 1)}. {option}")
-            print("\n")
-
 
 if __name__ == '__main__':
     # plotter = Plotter()
@@ -307,12 +341,14 @@ if __name__ == '__main__':
     # plotter.create_bar_chart(categories, values)
     # plotter.create_pie_chart(sizes, labels)
     # plotter.create_histogram(y)
-    import asyncio
-
-    eg = ExamPaperGenerator("questions")
+    # import asyncio
+    #
+    # eg = ExamPaperGenerator("questions")
     # asyncio.run(eg.load_question_bank(1, 5))
-    asyncio.run(eg.load_single_choice_bank())
-
-    question_type = {'fill': 5, 'judge': 5, 'multiple_choice': 5, 'short_answer': 5, 'single_choice': 10}
-    exam_paper_info = asyncio.run(eg.generate_exam(question_type))
-    print(exam_paper_info)
+    # asyncio.run(eg.load_single_choice_bank())
+    #
+    # question_type = {'fill': 5, 'judge': 5, 'multiple_choice': 5, 'short_answer': 5, 'single_choice': 10}
+    # exam_paper_info = asyncio.run(eg.generate_exam(question_type))
+    # print(exam_paper_info)
+    load_default_table_from_conf("D:\\Project\\flight-training-server\\src\\static\\default_table.yaml",
+                                 "state_registration")

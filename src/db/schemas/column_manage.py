@@ -42,6 +42,7 @@ class UpdateColumnManage(BaseModel):
     is_encrypt: bool = None
     association: List = []
     update_user: str = None
+    field_length: int = None
 
 
 class DeleteColumnManage(BaseModel):

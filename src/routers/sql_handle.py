@@ -11,6 +11,7 @@ from src.utils.sql_config import sql_handle
 from src.utils.dependencies import DALGetter
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
+from src.utils import generate_uuid
 from src.db.models import TableManage, ColumnManage
 from src.db.schemas.table_manage import UserSyncIn
 from src.utils.logger import logger, generate_mysql_log_data
@@ -125,6 +126,7 @@ async def create_table_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     if not res:
         return resp_404("未能获取到表信息")
     table_name = f"auto_{res.code}"
+    obj_in.update({"id": generate_uuid()})
     try:
         inserted_data_id = await sql_handle.insert(table_name, obj_in)
     except SQLAlchemyError as e:
@@ -179,36 +181,35 @@ async def get_column_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, cod
     return resp_200(data={'id': id_})
 
 
-# TODO 名单导出
-# @router.get('export_data/{code}', tags=['SqlHandle'], summary="导出指定表所有数据")
-# async def list_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-#                     *, code: str, export_format: str = None):
-#     dal.setDb(TableManage)
-#     res = await dal.get_by(code=code)
-#     if not res:
-#         return resp_200(data=[])
-#     table_name = f"auto_{res.code}"
-#     table_list = await sql_handle.select(table_name)
-#     if not table_list:
-#         table_list = []
-#
-#     if export_format:
-#         if export_format.lower() in ['xls', 'xlsx']:
-#             file_name = f"{code}.{export_format}"
-#             generate_excel(table_list, settings.LOCAL_DOWNLOAD_FILE_PATH, file_name)
-#             return resp_200(msg="excel成功导出")
-#         elif export_format.lower() == 'pdf':
-#             file_name = f"{code}.{export_format}"
-#             generate_pdf(table_list, settings.LOCAL_DOWNLOAD_FILE_PATH, file_name)
-#             return resp_200(msg="pdf成功导出")
-#
-#     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type=code,
-#                                              handle_user="", handle_params={"table_code": code},
-#                                              entity_id=res.id, handle_reason='导出指定表所有数据')
-#     await sql_handle.add_records("log_manage", mysql_log_data)
-#
-#     # 未选择导出格式或者格式不支持时返回JSON数据
-#     return resp_200(data={"data": table_list, "total": len(table_list)})
+@router.get('export_data/{code}', tags=['SqlHandle'], summary="导出指定表数据")
+async def list_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                    *, code: str, export_format: str = None):
+    dal.setDb(TableManage)
+    res = await dal.get_by(code=code)
+    if not res:
+        return resp_200(data=[])
+    table_name = f"auto_{res.code}"
+    table_list = await sql_handle.select(table_name)
+    if not table_list:
+        table_list = []
+
+    if export_format:
+        if export_format.lower() in ['xls', 'xlsx']:
+            file_name = f"{code}.{export_format}"
+            generate_excel(table_list, settings.LOCAL_DOWNLOAD_FILE_PATH, file_name)
+            return resp_200(msg="excel成功导出")
+        elif export_format.lower() == 'pdf':
+            file_name = f"{code}.{export_format}"
+            generate_pdf(table_list, settings.LOCAL_DOWNLOAD_FILE_PATH, file_name)
+            return resp_200(msg="pdf成功导出")
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type=code,
+                                             handle_user="", handle_params={"table_code": code},
+                                             entity_id=res.id, handle_reason='导出指定表所有数据')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    # 未选择导出格式或者格式不支持时返回JSON数据
+    return resp_200(data={"data": table_list, "total": len(table_list)})
 
 
 @router.post('/sync_user/', tags=['SqlHandle'], summary="同步用户到管理系统")

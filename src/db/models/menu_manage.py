@@ -5,7 +5,7 @@
 # @File    : table_manage.py
 # @Software: PyCharm
 
-from sqlalchemy import Column, String, DateTime, func, text, Text, JSON, Integer, ForeignKey, Float
+from sqlalchemy import Column, String, DateTime, func, text, Text, JSON, Integer, ForeignKey, Float, Boolean
 from sqlalchemy.orm import relationship
 
 from src.db.config import Base
@@ -30,6 +30,8 @@ class MenuManage(Base):
     create_user = Column(String(64), comment="创建者")
     update_user = Column(String(64), comment="修改人")
     table_code = Column(String(32), nullable=True, comment="菜单对应数据库表，后续一系列的增删改查")
+    use_type = Column(Integer, comment="使用类型：0：录入，1：查询，2：统计，3：到期提醒", default=0)
+    tree_mode = Column(Boolean, comment="是否可按树结构显示：ture：可以，false：不可以", default=False)
 
     parent_id = relationship("MenuManage", remote_side=[code], backref='menu_manage')  # 自关联
     # table_manage = relationship("TableManage", back_populates="menu_manage", lazy="select")

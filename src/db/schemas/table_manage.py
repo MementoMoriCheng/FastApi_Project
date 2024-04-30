@@ -52,6 +52,7 @@ class TableManageSchema(BaseModel):
     description: str = None
     update_user: str = None
     create_user: str = None
+    sync_flag: int = None
     create_time: Union[datetime, None]
     update_time: Union[datetime, None]
 

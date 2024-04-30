@@ -8,6 +8,8 @@ from src.utils.sql_config import sql_handle
 
 # 存储所有的客户端
 Clients = set()
+# 增加一个事件标志，用于控制服务器线程的退出
+server_stop_event = threading.Event()
 
 
 # 服务端
@@ -15,6 +17,7 @@ class WebSocketService:
     def __init__(self):
         self.ip = settings.WEBSOCKET_ADDRESS
         self.port = settings.WEBSOCKET_PORT
+        self.server_thread = None
 
     async def callback_send(self, msg, websocket=None):
         """
@@ -93,18 +96,21 @@ class WebSocketService:
 
             # 链接断开
             except websockets.ConnectionClosed:
-                logger.error("ConnectionClosed...")
-                Clients.remove(websocket)
+                logger.info("ConnectionClosed...")
+                if websocket in Clients:  # 先检查连接是否存在
+                    Clients.remove(websocket)
                 break
             # 无效状态
             except websockets.InvalidState:
-                logger.error("InvalidState...")
-                Clients.remove(websocket)
+                logger.warning("InvalidState...")
+                if websocket in Clients:  # 先检查连接是否存在
+                    Clients.remove(websocket)
                 break
             # 报错
             except Exception as e:
                 logger.error("WSlinkError ", e)
-                Clients.remove(websocket)
+                if websocket in Clients:  # 先检查连接是否存在
+                    Clients.remove(websocket)
                 break
 
     async def run_server(self):
@@ -118,9 +124,38 @@ class WebSocketService:
         asyncio.run(self.run_server())
 
     def start_server(self):
-        thread = threading.Thread(target=self.websocket_server)
-        thread.start()
+        """
+        启动WebSocket服务
+        """
+
+        self.server_thread = threading.Thread(target=self.websocket_server)
+        self.server_thread.start()
         logger.info(f'WebSocket service init successfully, address is: {self.ip}:{self.port}')
+
+    def stop_server(self):
+        """
+        停止WebSocket服务
+        """
+        server_stop_event.set()  # 设置停止事件
+        logger.info('Initiating WebSocket service shutdown...')
+
+        # 清理客户端集合
+        global Clients
+        Clients.clear()
+
+        # 强制关闭所有连接（可选，根据需求决定是否执行）
+        for client in Clients.copy():
+            try:
+                client.close()
+            except Exception as e:
+                logger.warning(f'Error closing client connection: {e}')
+
+        # 等待服务线程退出（可选，根据实际情况调整超时时间）
+        self.server_thread.join(timeout=5)
+        if self.server_thread.is_alive():
+            logger.warning('WebSocket service thread did not terminate within the expected time.')
+        else:
+            logger.info('WebSocket service stopped successfully.')
 
 
 w_s = WebSocketService()

@@ -26,6 +26,7 @@ class TableManage(Base):
     update_user = Column(String(64), comment="修改人")
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
     status = Column(Integer, comment="表状态：0：设计中，1：使用中", default=0)
+    sync_flag = Column(Integer, comment="同步标志：0：不同步，1：同步", default=0)
 
     column_manage = relationship("ColumnManage", back_populates="table_manage", lazy="select")
     # menu_manage = relationship("MenuManage", back_populates="table_manage")

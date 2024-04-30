@@ -6,7 +6,9 @@
 # @Software: PyCharm
 import random
 
-from sqlalchemy import Text, Integer, String, Boolean, DateTime, VARCHAR
+from sqlalchemy import Text, Integer, String, Boolean
+
+base_table_schema = {}
 
 table_schema = {
     'id': String(36),

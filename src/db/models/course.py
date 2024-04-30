@@ -31,6 +31,7 @@ class CourseChapter(Base):
 
     course_source = relationship("CourseSource", back_populates="course_chapter", lazy="select")
     questions = relationship("Questions", back_populates="course_chapter", lazy="select")
+    online_learning_record = relationship("OnlineLearningRecord", back_populates="course_chapter", lazy="select")
 
     parent = relationship("CourseChapter", remote_side=[id], backref='children')
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
@@ -57,7 +58,6 @@ class CourseSource(Base):
     update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
 
     course_chapter = relationship("CourseChapter", back_populates="course_source", lazy="select")
-    online_learning_record = relationship("OnlineLearningRecord", back_populates="course_source", lazy="select")
 
     __mapper_args__ = {"eager_defaults": True}
 
@@ -128,18 +128,18 @@ class OnlineLearningRecord(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     student_id = Column(String(36), comment="学生ID")
-    course_source_id = Column(
+    course_chapter_id = Column(
         String(36),
-        ForeignKey("course_source.id", ondelete="CASCADE"),
-        nullable=False,
-        comment="课程名称/教学资源id")
+        ForeignKey("course_chapter.id", ondelete="CASCADE"),
+        nullable=False, comment="课程名称/教学资源id")
+
     start_time = Column(DateTime, comment="学生开始学习的时间")
     end_time = Column(DateTime, comment="学生结束学习的时间")
-    Keep_time = Column(Integer, comment="学习时长，单位秒")
+    keep_time = Column(Integer, comment="学习时长，单位秒")
     create_time = Column(DateTime, server_default=func.now())
     update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
 
-    course_source = relationship("CourseSource", back_populates="online_learning_record", lazy="select")
+    course_chapter = relationship("CourseChapter", back_populates="online_learning_record", lazy="select")
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
 
     __mapper_args__ = {"eager_defaults": True}

@@ -5,9 +5,10 @@
 # @File    : examination.py
 # @Software: PyCharm
 from src.db.config import Base
-from sqlalchemy.orm import relationship
-from sqlalchemy import Column, String, DateTime, func, JSON, Integer, Text, CheckConstraint, text, ForeignKey
 from src.utils import generate_uuid
+from sqlalchemy.orm import relationship
+from sqlalchemy import (Column, String, DateTime, func,
+                        Integer, Text, CheckConstraint, text, ForeignKey, Float)
 
 
 class ExamResult(Base):
@@ -59,5 +60,34 @@ class ExamResultDetail(Base):
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
 
     exam_result = relationship("ExamResult", back_populates="exam_result_detail", lazy="select")
+
+    __mapper_args__ = {"eager_defaults": True}
+
+
+class ScoreStatistics(Base):
+    """
+    考试成绩统计表
+    """
+
+    __tablename__ = 'score_statistics'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(64), comment="期班名称")
+    major = Column(String(32), comment="专业课/课程")
+
+    student_num = Column(Integer, nullable=False, comment="学生人数")
+
+    highest_score = Column(Float, nullable=False, comment="最高分")
+    lowest_score = Column(Float, nullable=False, comment="最低分")
+    average_score = Column(Float, nullable=False, comment="平均分")
+
+    ideal_percentage = Column(Float, nullable=False, comment="优秀的比例")
+    good_percentage = Column(Float, nullable=False, comment="良好的比例")
+    pass_percentage = Column(Float, nullable=False, comment="及格的比例")
+    flunk_percentage = Column(Float, nullable=False, comment="不及格的比例")
+    remarks = Column(String(255), comment="备注")
+
+    is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
+    create_time = Column(DateTime, server_default=func.now())
 
     __mapper_args__ = {"eager_defaults": True}

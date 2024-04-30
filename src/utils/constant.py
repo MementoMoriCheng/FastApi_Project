@@ -18,6 +18,9 @@ PUBLISHED = 1
 FATHER = 1
 SON = 0
 
+# 关联表列指定长度
+COLUMN_LENGTH = 36
+
 # 开关
 ENABLE = 1  # 角色已启用
 
@@ -29,16 +32,6 @@ class RecordsStatusCode:
     INFO = 1
     WARNING = 2
     ERROR = 3
-
-
-class QuestionLevel:
-    """题型难度"""
-
-    Introductory = 1
-    Basic = 2
-    Intermediate = 3
-    Advanced = 4
-    Expert = 5
 
 
 class QuestionType:

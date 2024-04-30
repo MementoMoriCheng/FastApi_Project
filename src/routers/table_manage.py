@@ -50,12 +50,14 @@ async def create_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: Cr
     exist_res = await dal.get_by(code=obj_in.code)
     if exist_res:
         return resp_403(msg=f"{obj_in.name} is existed!")
-    res = await dal.create(obj_in)
-    if not res:
-        return resp_404()
+
     table_name = f"auto_{obj_in.code}"
     columns_config = {key: table_schema[key] for key in obj_in.dict() if key in table_schema}
     sql_handle.create_dynamic_table_core(table_name, columns_config)
+
+    res = await dal.create(obj_in)
+    if not res:
+        return resp_404()
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=obj_in.code,
                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),

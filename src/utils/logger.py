@@ -69,8 +69,7 @@ class Logger:
         self.mutex = Lock()
         self.console = console
         self._logger_instance = None
-        log_dir = settings.LOG_PATH if settings.LOG_PATH else os.path.join(
-            Path(__file__).absolute().parent.parent.parent, "log")
+        log_dir = settings.LOG_PATH if settings.LOG_PATH else os.path.join(settings.ROOT_PATH, "log")
         log_path = Path(log_dir)
         if not log_path.is_dir():
             log_path.mkdir(parents=True)

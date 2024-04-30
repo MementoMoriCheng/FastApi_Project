@@ -8,7 +8,6 @@
 import os
 import shutil
 import asyncio
-import websockets
 from src.utils.logger import logger
 from src.config.setting import settings
 from src.utils.sql_config import sql_handle
