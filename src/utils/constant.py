@@ -24,6 +24,9 @@ COLUMN_LENGTH = 36
 # 开关
 ENABLE = 1  # 角色已启用
 
+# 飞行数据表名
+FLIGHT_DATA_TABLE = "gnss_data"
+
 
 class RecordsStatusCode:
     """数据库记录日志状态码"""
@@ -34,15 +37,16 @@ class RecordsStatusCode:
     ERROR = 3
 
 
-class QuestionType:
+class QuestionTypeIndex:
     """题型类型"""
+    SingleChoice = 0
+    MultipleChoice = 1
+    Fill = 2
+    Judge = 3
+    ShortAnswer = 4
 
-    SingleChoice = 1
-    MultipleChoice = 2
-    Fill = 3
-    Judge = 4
-    ShortAnswer = 5
 
+QUESTION_TYPE_LIST = ['single_choice_num', 'multiple_choice_num', 'fill_num', 'judge_num', 'short_answer_num']
 
 # 数据库记录日志格式
 LOG_RECORDS = {
@@ -75,12 +79,71 @@ GNSS_RECORDS = {
     'horizon_speed': '水平速度',
     'upward_speed': '垂直速度',
     'track_direction': '航迹方向',
-    'positioning_status_satellite_count': '定位状态/卫星数量',
-    'solution_satellite_count': '解决方案卫星数量',
+    'positioning_status': '定位状态',
+    'observation_satellite': '卫星数量',
+    'calculate_satellite': '解算卫星数',
+    'rtk_satellite': '双频RTK 卫星数',
     'differential_age': '差分龄期',
     'azimuth': '方位角',
     'pitch': '俯仰角',
     'checksum': '校验和',
-    'create_time': "时间",
+    'update_time': "时间",
     'is_delete': "是否删除, 1：删除、0：保留，默认值：0"
+}
+
+# 数据库记录FLIGHT_DATA格式
+FLIGHT_DATA = {
+    'id': None,
+    'time': None,
+    'update_time': None,
+    'plane_code': None,
+    'beidou_height': None,
+    'ground_speed': None,
+    'heading': None,
+    'longitude': None,
+    'latitude': None,
+    'pitch_angle': None,
+    'bank_angle': None,
+    'longitudinal_load_factor': None,
+    'lateral_load_factor': None,
+    'normal_load_factor': None,
+    'mach_number': None,
+    'vertical_rate': None,
+    'angle_of_attack': None,
+    'side_slip_angle': None,
+    'pressure_altitude': None,
+    'radio_altitude': None,
+    'indicated_airspeed': None,
+    'true_airspeed': None,
+    'engine_rpm': None,
+    'engine_temperature': None,
+    'oil_temperature': None,
+    'remaining_fuel': None,
+    'landing_gear_position': None,
+    'throttle_position': None,
+    'aileron_position': None,
+    'elevator_position': None,
+    'rudder_position': None,
+    'is_delete': None
+}
+
+# 数据库记录FLIGHT_ALARM格式
+FLIGHT_ALARM = {
+    'id': None,
+    'plane_code': None,
+    'low_altitude': None,
+    'altitude': None,
+    'low_speed': None,
+    'speed': None,
+    'lost_speed': None,
+    'over_temperature': None,
+    'temperature': None,
+    'shutdown': None,
+    'engine_speed': None,
+    'note_1': None,
+    'note_2': None,
+    'note_3': None,
+    'time': None,
+    'update_time': None,
+    'is_delete': None
 }

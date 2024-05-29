@@ -53,7 +53,7 @@ class MenuManageSchema(BaseModel):
     name: str
     parent: str = None
     type: int
-    description: str
+    description: str = None
     status: int = 2
     icon: str = 'star-icon'
     sort: float = 999

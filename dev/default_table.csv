@@ -1,0 +1,34 @@
+96ddef95-46d1-4102-9db6-44f09b1d0d15,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,位置,0,1,36,0,engine_position,varchar,,,,,"[{""tableCol"": ""w_zh__MCQX"", ""tableCode"": ""engine_position_dict""}]",null,sysadmin,,2024/5/9 9:34,2024/5/9 9:34
+eb1d03ad-a88f-488c-b6aa-8713c4ad7b6f,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,更新时间,0,1,,0,last_update,datetime,,,,,[],null,sysadmin,,2024/5/8 17:15,2024/5/8 17:15
+0a33d5bb-25f6-4d32-b884-87b02c191897,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,备注,0,1,64,0,comment,varchar,1,,,,[],null,sysadmin,,2024/5/8 17:14,2024/5/8 17:14
+14578593-e1bf-4a25-b751-515d81a13848,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,填表人,0,1,10,0,reporter,varchar,,,,,[],null,sysadmin,,2024/5/8 17:14,2024/5/8 17:14
+9d939b0b-4663-41cb-b340-c51e46b19561,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,航站,0,1,10,0,station,varchar,1,,,,[],null,sysadmin,,2024/5/8 17:13,2024/5/8 17:13
+40419990-e65c-46b8-a702-729d3d7bea2b,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,定检级别,0,1,10,0,inspection_level,varchar,,,,,[],null,sysadmin,,2024/5/8 17:13,2024/5/8 17:13
+a163d698-7ad4-4626-a18b-5a636ffd768e,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,使用时间,0,1,,0,operating_hours,int,,,,,[],null,sysadmin,,2024/5/8 17:12,2024/5/8 17:12
+d4d4b40f-e715-43b3-b04b-ca5cd154f05f,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,日期,0,1,,0,date,date,,,,,[],null,sysadmin,,2024/5/8 17:12,2024/5/8 17:12
+fb113841-624c-4eca-9eef-6bad795f9a82,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,螺旋桨序号,0,1,36,0,engine_serial,varchar,,,,,"[{""tableCol"": ""l_x_j_x_h__BEbc"", ""tableCode"": ""f_j_x_x_d_j_b__hrwM""}]",null,sysadmin,,2024/5/8 17:11,2024/5/8 17:11
+09dd79c1-ed9e-4ac4-9d0f-9545b21254be,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,螺旋桨型号,0,1,36,0,engine_model,varchar,,,,,"[{""tableCol"": ""l_x_j_x_h__ewrn"", ""tableCode"": ""f_j_x_x_d_j_b__hrwM""}]",null,sysadmin,,2024/5/8 17:10,2024/5/8 17:10
+f8454c06-3a10-43db-8358-f859d71fc327,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,机号,0,1,36,0,aircraft_serial,varchar,,,,,"[{""tableCol"": ""j_h__bGYP"", ""tableCode"": ""f_j_x_x_d_j_b__hrwM""}]",null,sysadmin,,2024/5/8 17:04,2024/5/8 17:04
+48f34432-c12b-4491-8b95-aa8e0502dbc6,2762b17f-7fc5-4a93-9fc8-c1ee1daff11d,,,0,UID,0,1,,0,UID,int,,1,1,,[],null,sysadmin,,2024/5/8 16:58,2024/5/8 17:26
+3ba2be09-c282-4668-a123-cfe5ccdd7719,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,UID,0,1,,0,UID,int,,1,1,,[],null,sysadmin,,2024/5/9 9:46,2024/5/9 9:46
+53e58125-42ca-4e42-9e7a-4171ddb61ab1,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,更新时间,0,1,,0,last_update,datetime,,,,,[],null,sysadmin,,2024/5/9 9:46,2024/5/9 9:46
+bc9c516e-76d7-442a-9f49-c36455141750,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,备注,0,1,64,0,comment,varchar,1,,,,[],null,sysadmin,,2024/5/9 9:46,2024/5/9 9:46
+8f2b1289-595f-4286-8c0e-7a6b3dd4f37d,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,填表人,0,1,10,0,reporter,varchar,,,,,[],null,sysadmin,,2024/5/9 9:45,2024/5/9 9:45
+3115aa9a-1418-45e3-b6a8-643e2f2d1c34,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,航站,0,1,10,0,station,varchar,,,,,[],null,sysadmin,,2024/5/9 9:45,2024/5/9 9:45
+1c519f2e-97c8-4654-839d-8808f39d162a,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,内容,0,1,36,0,content,varchar,1,,,,"[{""multiple"": true, ""tableCol"": ""n_r__PbHJ"", ""tableCode"": ""content_dict""}]",null,sysadmin,,2024/5/9 9:44,2024/5/9 9:44
+86e0f6eb-0781-4904-95d4-ff8f1e3deb7c,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,描述,0,1,200,0,description,varchar,1,,,,[],null,sysadmin,,2024/5/9 9:40,2024/5/9 9:40
+478f5b36-a8cd-41ee-aaee-bdfc3695e271,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,上次翻修,0,1,,0,last_overhaul_date,date,1,,,,[],null,sysadmin,,2024/5/9 9:38,2024/5/9 9:38
+1e9bdee9-1f21-4516-9390-a452bee76c76,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,日期,0,1,,0,date,date,,,,,[],null,sysadmin,,2024/5/9 9:37,2024/5/9 9:37
+1b9a2350-0eae-44c2-9b9a-9e1bd0efb14d,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,螺旋桨序号,0,1,36,0,engine_serial,varchar,,,,,"[{""tableCol"": ""l_x_j_x_h__BEbc"", ""tableCode"": ""f_j_x_x_d_j_b__hrwM""}]",null,sysadmin,,2024/5/9 9:37,2024/5/9 11:45
+e5a7cd97-dfca-4cec-becb-ca716f0a5ec6,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,螺旋桨型号,0,1,36,0,engine_model,varchar,,,,,"[{""tableCol"": ""l_x_j_x_h__ewrn"", ""tableCode"": ""f_j_x_x_d_j_b__hrwM""}]",null,sysadmin,,2024/5/9 9:36,2024/5/9 9:36
+ac236516-7eaa-4a78-82b0-69c159a41593,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,位置,0,1,36,0,engine_position,varchar,1,,,,"[{""tableCol"": ""w_zh__MCQX"", ""tableCode"": ""engine_position_dict""}]",null,sysadmin,,2024/5/9 9:20,2024/5/9 11:46
+44dc6da5-4619-4223-8a89-441fc03f99df,9c0197f8-0491-4f8d-884d-b9df51ac8166,,,0,机号,0,1,36,0,aircraft_serial,varchar,,,,,"[{""tableCol"": ""j_h__bGYP"", ""tableCode"": ""f_j_x_x_d_j_b__hrwM""}]",null,sysadmin,,2024/5/9 9:20,2024/5/9 11:39
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,

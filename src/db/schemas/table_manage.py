@@ -21,6 +21,8 @@ class CreateTableManage(BaseModel):
     update_user: str = None
     menu_id: str = None
     is_delete: bool = False
+    create_time: Union[datetime, None]
+    update_time: Union[datetime, None]
 
     @validator('name')
     def validate_name(cls, value):
@@ -38,6 +40,7 @@ class UpdateTableManage(BaseModel):
     description: str = None
     update_user: str = None
     is_delete: bool = False
+    update_time: Union[datetime, None]
 
 
 class DeleteProject(BaseModel):

@@ -16,8 +16,8 @@ from src.utils.dependencies import DALGetter
 from src.utils.logger import logger, generate_mysql_log_data
 from src.utils.constant import PUBLISHED, DELETE, RESERVE, RecordsStatusCode
 from src.utils.responses import resp_200, resp_404, resp_500, resp_400
-from src.utils.generate_file import ExamPaperGenerator
-from src.utils.tools import CalculateGrade, cal_grade_percentage
+from src.utils.exam_related_tools import ExamPaperGenerator
+from src.utils.exam_related_tools import CalculateGrade, cal_grade_percentage
 from src.db.models import (
     Examination, ExamResult, ExamResultDetail, Paper, PaperQuestions, Questions
 )
@@ -234,6 +234,7 @@ async def get_paper_question_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
 
 
 @router.post("/paper_question", tags=["PaperQuestions"], summary="创建试卷-试题信息")
+# @router.post("/create_paper", tags=["SqlHandle"], summary="创建试卷")
 async def create_paper_question_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
                                      create_paper_question: CreatePaperQuestionSchema):
     paper_info_list = []
@@ -348,6 +349,7 @@ async def get_exam_result_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id
 
 
 @router.post("/exam_result/cal_grade", tags=["ExamResult"], summary="计算考试结果")
+# @router.post("/cal_grade", tags=["SqlHandle"], summary="计算考试结果")
 async def cal_grade(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                     exam_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                     question_dal: ExecDAL = Depends(DALGetter(ExecDAL)),

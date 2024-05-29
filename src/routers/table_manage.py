@@ -30,6 +30,17 @@ async def get_table_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str
     return resp_200(data=TableManageSchema.from_orm(res))
 
 
+@router.get('/code/{code}', tags=['TableManage'], summary="通过code获取表的信息")
+async def get_table_info_by_code(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, code: str):
+    dal.setDb(TableManage)
+    res = await dal.get_by(code=code)
+    logger.debug(f"通过code:{code}获取表的信息")
+    if not res:
+        return resp_404()
+
+    return resp_200(data=TableManageSchema.from_orm(res))
+
+
 @router.get('', tags=['TableManage'], summary="获取所有表的信息")
 async def list_table_info(
         dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
@@ -46,6 +57,7 @@ async def list_table_info(
 @router.post('', tags=['TableManage'], summary="创建数据库表")
 async def create_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: CreateTableManage):
     dal.setDb(TableManage)
+    obj_in.code = obj_in.code.lower()
     logger.info(f"创建数据库表:{obj_in.dict()}")
     exist_res = await dal.get_by(code=obj_in.code)
     if exist_res:

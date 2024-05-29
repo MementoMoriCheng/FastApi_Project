@@ -24,6 +24,7 @@ class CreateColumnManage(BaseModel):
     is_parent: bool = False  # 该字段是否是父级字段
     association: List = []
     create_user: str = None
+    description: str = None
     primary: bool = None
     unique: bool = None
     empty: bool = None
@@ -43,6 +44,7 @@ class UpdateColumnManage(BaseModel):
     association: List = []
     update_user: str = None
     field_length: int = None
+    description: str = None
 
 
 class DeleteColumnManage(BaseModel):
@@ -66,6 +68,7 @@ class ColumnManageSchema(BaseModel):
     association: List = None
     create_user: str = None
     field_length: int = None
+    description: str = None
     create_time: Union[datetime, None]
     update_time: Union[datetime, None]
 
@@ -80,9 +83,11 @@ class ColumnListSchema(BaseModel):
     type: str
     parent: str = None
     status: int = None
+    empty: bool = None
     is_parent: bool = None
     is_encrypt: bool = None
     primary: bool = None
+    empty: bool = None
     association: Optional[List] = None
 
     class Config:

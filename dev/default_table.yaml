@@ -1,0 +1,314 @@
+src-openeuler:
+  patch_format:
+    hint: patch_format
+    module: patch_format.check_patch_format
+    entry: CheckPatchFormat
+    allow_list: ["kernel"]
+  spec:
+    hint: check_spec_file
+    module: spec.check_spec
+    entry: CheckSpec
+    ignored: ["homepage"]
+  code:
+    hint: check_code_style
+    module: code.check_code_style
+    entry: CheckCodeStyle
+    exclude: True
+    ignored: ["patch"]
+  package_yaml:
+    hint: check_package_yaml_file
+    module: package_yaml.check_yaml
+    entry: CheckPackageYaml
+    ignored: ["fields"]
+  package_license:
+    hint: check_package_license
+    module: package_license.check_license
+    entry: CheckLicense
+  binary:
+    hint: check_binary_file
+    module: binary.check_binary_file
+    entry: CheckBinaryFile
+  sca:
+    exclude: True
+  openlibing:
+    exclude: True
+  commit_msg:
+    exclude: True
+  source_consistency:
+    hint: check_consistency
+    module: source_consistency.check_consistency
+    entry: CheckSourceConsistency
+  anti_poisoning:
+    exclude: True
+openeuler:
+  spec:
+    exclude: True
+  code:
+    exclude: True
+  package_yaml:
+    exclude: True
+  package_license:
+    hint: check_package_license
+    module: package_license.check_openeuler_license
+    entry: CheckOpeneulerLicense
+  binary:
+    exclude: True
+  sca:
+    hint: check_sca
+    module: sca.check_sca
+    entry: CheckSCA
+    deny_list: ["bishengjdk-17", "bishengjdk-8", "bishengjdk-11", "bishengjdk-riscv", "gcc", "kernel"]
+  openlibing:
+    hint: code
+    module: openlibing.check_code
+    entry: CheckCode
+    allow_list: ["pkgship", "kunpengsecl", "release-tools", "yocto-meta-openeuler", "yocto-embedded-tools",
+                 "gcc", "gcc-anti-sca", "A-Ops", "openeuler-jenkins", "lcr", "eggo", "oecp", "etmem", "A-Tune",
+                 "libkae", "KubeOS", "ci-bot", "iSulad", "gazelle", "clibcni", "secGear", "eulerfs", "oemaker",
+                 "go-gitee", "secpaver", "pyporter", "radiaTest", "stratovirt", "iSulad-img", "kae_driver",
+                 "isula-build", "cve-manager", "attest-tools", "oec-hardware", "itrustee_sdk", "wisdom-advisor",
+                 "isula-transform", " itrustee_client", "A-Tune-Collector", "itrustee_tzdriver", "website-v2",
+                 "yocto-poky", "bishengjdk-17", "bishengjdk-8", "bishengjdk-11", "bishengjdk-riscv", "powerapi",
+                 "eagle", "dcs", "astream", "QARobot", "oec-application", "gala-gopher", "gala-anteater",
+                 "gala-spider", "gala-ragdoll", "aops-zeus", "aops-ceres", "aops-apollo", "aops-diana", "aops-hermes",
+                 "aops-vulcanus", "Kmesh", "BiShengCLanguage", "ifm_nettle", "syscare", "dpu-utilities", "sysboost",
+                 "libgmem", "unizip", "cantian", "cantian-connector-mysql", "openeuler-os-build", "openeuler-obs",
+                 "oeAware-collector", "libkperf"]
+  commit_msg:
+    hint: commit_msg
+    module: commit_msg.check_commit_msg
+    entry: CheckCommitMsg
+    allow_list: ["yocto-meta-openeuler"]
+  source_consistency:
+    exclude: True
+  patch_format:
+    exclude: True
+  anti_poisoning:
+    hint: check_anti_poisoning
+    module: anti_poisoning.check_anti_poisoning
+    entry: CheckAntiPoisoning
+    allow_list: ["aops-apollo", "iSulad",]
+
+## 期班登记
+#table_name: tb_classes
+#columns:
+#  col_name:
+#      name: 基地
+#      col_type: nvarchar
+#      col_length: 100
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 序号
+#      col_type: int
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 期班
+#      col_type: nvarchar
+#      col_length: 100
+#      col_nullable: false
+#      col_primary_key: true
+#  col_name:
+#      name: 期
+#      col_type: int
+#      col_length: 48
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 班
+#      col_type: nvarchar
+#      col_length: 2
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 简称
+#      col_type: nvarchar
+#      col_length: 48
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 备注
+#      col_type: nvarchar
+#      col_length: 64
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 更新时间
+#      col_type: datetime
+#      col_length: null
+#      col_nullable: false
+#      col_primary_key: false
+#
+## 其他用户信息登记
+#table_name: tb_user
+#columns:
+#  col_name:
+#      name: 单位
+#      col_type: nvarchar
+#      col_length: 100
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: UID
+#      col_type: bigint
+#      col_length: null
+#      col_nullable: false
+#      col_primary_key: true
+#  col_name:
+#      name: 姓名
+#      col_type: nvarchar
+#      col_length: 10
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 性别
+#      col_type: nvarchar
+#      col_length: 1
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 出生日期
+#      col_type: date
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 政治面貌
+#      col_type: nvarchar
+#      col_length: 4
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 党团日期
+#      col_type: date
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 民族
+#      col_type: nvarchar
+#      col_length: 6
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 籍贯
+#      col_type: nvarchar
+#      col_length: 16
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 学历
+#      col_type: nvarchar
+#      col_length: 4
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 学位
+#      col_type: nvarchar
+#      col_length: 4
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 职务
+#      col_type: nvarchar
+#      col_length: 16
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 入职年月
+#      col_type: date
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 档案编号
+#      col_type: int
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 相片
+#      col_type: varchar
+#      col_length: max
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 在位
+#      col_type: bit
+#      col_length: null
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 保密
+#      col_type: bit
+#      col_length: null
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 排序
+#      col_type: int
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 附件
+#      col_type: varchar
+#      col_length: max
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 备注
+#      col_type: nvarchar
+#      col_length: 64
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 用户名
+#      col_type: nvarchar
+#      col_length: 50
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 身份
+#      col_type: nvarchar
+#      col_length: 20
+#      col_nullable: false
+#      col_primary_key: false
+#  col_name:
+#      name: 注册日期
+#      col_type: date
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 注销日期
+#      col_type: date
+#      col_length: null
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 登录密码
+#      col_type: varchar
+#      col_length: 200
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 绑定 IP
+#      col_type: varchar
+#      col_length: 64
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 绑定 MAC
+#      col_type: varchar
+#      col_length: 64
+#      col_nullable: true
+#      col_primary_key: false
+#  col_name:
+#      name: 更新时间
+#      col_type: datetime
+#      col_length: null
+#      col_nullable: false
+#      col_primary_key: false

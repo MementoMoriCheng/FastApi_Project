@@ -8,6 +8,7 @@
 import datetime
 import uuid
 import string
+import time
 import random
 import os
 import io
@@ -29,11 +30,11 @@ class ResponseMessage:
 
 
 def api_success(
-    status=200,
-    code=ResponseCode.SUCCESS,
-    msg=ResponseMessage.SUCCESS,
-    data=None,
-    **kwargs
+        status=200,
+        code=ResponseCode.SUCCESS,
+        msg=ResponseMessage.SUCCESS,
+        data=None,
+        **kwargs
 ):
     response = jsonify(code=code, data=data, msg=msg, **kwargs)
     response.status_code = status
@@ -64,6 +65,13 @@ def datetime_local():
 
 def generate_uuid():
     return str(uuid.uuid4())
+
+
+def generate_bigint_id():
+    timestamp = int(time.time() * 1000)
+    random_part = random.randint(0, 999999)
+    bigint_id = (timestamp << 20) + random_part
+    return bigint_id
 
 
 def generate_filename():

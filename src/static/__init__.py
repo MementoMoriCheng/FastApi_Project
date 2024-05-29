@@ -4,11 +4,7 @@
 # @Author  : yilifeng
 # @File    : __init__.py
 # @Software: PyCharm
-import random
-
-from sqlalchemy import Text, Integer, String, Boolean
-
-base_table_schema = {}
+from sqlalchemy import Text, Integer, String, Boolean, DateTime
 
 table_schema = {
     'id': String(36),
@@ -17,7 +13,9 @@ table_schema = {
     'description': Text,
     'create_user': String(64),
     'update_user': String(64),
-    'is_delete': Integer
+    'is_delete': Integer,
+    'create_time': DateTime,
+    'update_time': DateTime
 }
 
 column_schema = {
@@ -34,6 +32,7 @@ column_schema = {
 }
 
 column_type = {
+    "bigint": "bigint",
     "int": "Integer",
     "datetime": "DateTime",
     "date": "Date",

@@ -6,49 +6,11 @@
 # @Software: PyCharm
 
 import os
-import random
-import yaml
-from yaml.error import YAMLError
 import pandas as pd
 from fpdf import FPDF
-from src.utils.logger import logger
 from openpyxl import Workbook
 import matplotlib.pyplot as plt
-from src.utils.constant import QuestionType
 import xml.etree.ElementTree as ET
-from src.utils.sql_config import sql_handle
-from src.static import base_table_schema, column_type
-
-
-def load_default_table_from_conf(conf_file, table_name):
-    """
-    加载默认表，只支持yaml格式
-    Args:
-        conf_file: 配置文件路径
-        table_name: 表名
-
-    Returns:
-
-    """
-    try:
-        with open(conf_file, "r") as f:
-            content = yaml.safe_load(f)
-    except IOError:
-        logger.exception("conf file %s not exist", conf_file)
-        return
-    except YAMLError:
-        logger.exception("illegal conf file format")
-        return
-
-    elements = content.get(table_name, {})
-    logger.debug("table name \"%s\" conf: %s", table_name, elements)
-    for name in elements:
-        col_type = column_type.get(elements[name].get("col_type"))
-        col_length = column_type.get(elements[name].get("col_length"))
-        col_nullable = column_type.get(elements[name].get("col_nullable"))
-        col_primary_key = column_type.get(elements[name].get("col_primary_key"))
-        base_table_schema.update()
-    sql_handle.create_dynamic_table_core(table_name, columns_config, )
 
 
 def generate_xml_from_query(results, table_name):
@@ -206,149 +168,19 @@ class Plotter:
         self.configure_plot(title, x_label, y_label)
         plt.show()
 
+# if __name__ == '__main__':
+# plotter = Plotter()
+# # 示例数据
+# x = range(10)
+# y = [i ** 2 for i in x]
+# categories = ['A', 'B', 'C', 'D', 'E']
+# values = [30, 25, 40, 35, 20]
+# sizes = [30, 25, 40, 35]
+# labels = ['Category A', 'Category B', 'Category C', 'Category D']
 
-
-
-
-class Question:
-    def __init__(self, question_id, question_text, answer, question_type, options=None):
-        self.question_id = question_id
-        self.question_text = question_text
-        self.options = options
-        self.answer = answer
-        self.question_type = question_type
-
-
-class ExamPaperGenerator:
-    def __init__(self, table_name):
-        self.table_name = table_name
-        self.chapter = None
-
-    async def load_single_choice_bank(self):
-        single_choices = await self.load_question_bank(QuestionType.SingleChoice)
-        question_bank = []
-        for row in single_choices:
-            question_id = row.get('id')
-            question_text = row.get('question')
-            options = row.get('options')
-            answer = row.get('answer')
-            question_type = row.get('type')
-            question = Question(question_id, question_text, answer, question_type, options)
-            question_bank.append(question)
-        return question_bank
-
-    async def load_multiple_choice_bank(self):
-        multiple_choices = await self.load_question_bank(QuestionType.MultipleChoice)
-        question_bank = []
-        for row in multiple_choices:
-            question_id = row.get('id')
-            question_text = row.get('question')
-            options = row.get('options')
-            answer = row.get('answer')
-            question_type = row.get('type')
-            question = Question(question_id, question_text, answer, question_type, options)
-            question_bank.append(question)
-        return question_bank
-
-    async def load_fill_bank(self):
-        fills = await self.load_question_bank(QuestionType.Fill)
-        question_bank = []
-        for row in fills:
-            question_id = row.get('id')
-            question_text = row.get('question')
-            answer = row.get('answer')
-            question_type = row.get('type')
-            question = Question(question_id, question_text, answer, question_type)
-            question_bank.append(question)
-        return question_bank
-
-    async def load_judge_bank(self):
-        judges = await self.load_question_bank(QuestionType.Judge)
-        question_bank = []
-        for row in judges:
-            question_id = row.get('id')
-            question_text = row.get('question')
-            options = row.get('options')
-            answer = row.get('answer')
-            question_type = row.get('type')
-            question = Question(question_id, question_text, answer, question_type, options)
-            question_bank.append(question)
-        return question_bank
-
-    async def load_short_answer_bank(self):
-        short_answers = await self.load_question_bank(QuestionType.ShortAnswer)
-        question_bank = []
-        for row in short_answers:
-            question_id = row.get('id')
-            question_text = row.get('question')
-            answer = row.get('answer')
-            question_type = row.get('type')
-            question = Question(question_id, question_text, answer, question_type)
-            question_bank.append(question)
-        return question_bank
-
-    async def load_question_bank(self, question_type, limit=100, is_desc=True):
-        conditions = {"type": question_type}
-        # 试题范围
-        if self.chapter:
-            conditions.update(course_chapter_id={"value": self.chapter, "operator": "in"})
-        # desc 降序
-        question_bank = await sql_handle.select(self.table_name, conditions=conditions,
-                                                order_by={"update_time": is_desc}, limit=limit)
-        return question_bank
-
-    async def generate_exam(self, question_type_counts, chapter):
-        self.chapter = chapter
-        exam_questions = []
-        for question_type, question_num in question_type_counts.items():
-            if question_type == "single_choice":
-                single_choice_bank = await self.load_single_choice_bank()
-                random.shuffle(single_choice_bank)
-                exam_questions.extend(single_choice_bank[:question_num])
-            if question_type == "multiple_choice":
-                multiple_choice_bank = await self.load_multiple_choice_bank()
-                random.shuffle(multiple_choice_bank)
-                exam_questions.extend(multiple_choice_bank[:question_num])
-            if question_type == "fill":
-                fill_bank = await self.load_fill_bank()
-                random.shuffle(fill_bank)
-                exam_questions.extend(fill_bank[:question_num])
-            if question_type == "judge":
-                judge_bank = await self.load_judge_bank()
-                random.shuffle(judge_bank)
-                exam_questions.extend(judge_bank[:question_num])
-            if question_type == "short_answer":
-                short_answer_bank = await self.load_short_answer_bank()
-                random.shuffle(short_answer_bank)
-                exam_questions.extend(short_answer_bank[:question_num])
-
-        return exam_questions
-
-
-if __name__ == '__main__':
-    # plotter = Plotter()
-    # # 示例数据
-    # x = range(10)
-    # y = [i ** 2 for i in x]
-    # categories = ['A', 'B', 'C', 'D', 'E']
-    # values = [30, 25, 40, 35, 20]
-    # sizes = [30, 25, 40, 35]
-    # labels = ['Category A', 'Category B', 'Category C', 'Category D']
-
-    # 使用示例
-    # plotter.create_line_plot(x, y)
-    # plotter.create_scatter_plot(x, y)
-    # plotter.create_bar_chart(categories, values)
-    # plotter.create_pie_chart(sizes, labels)
-    # plotter.create_histogram(y)
-    # import asyncio
-    #
-    # eg = ExamPaperGenerator("questions")
-    # asyncio.run(eg.load_question_bank(1, 5))
-    # asyncio.run(eg.load_single_choice_bank())
-    #
-    # question_type = {'fill': 5, 'judge': 5, 'multiple_choice': 5, 'short_answer': 5, 'single_choice': 10}
-    # exam_paper_info = asyncio.run(eg.generate_exam(question_type))
-    # print(exam_paper_info)
-    load_default_table_from_conf("D:\\Project\\flight-training-server\\src\\static\\default_table.yaml",
-                                 "state_registration")
+# 使用示例
+# plotter.create_line_plot(x, y)
+# plotter.create_scatter_plot(x, y)
+# plotter.create_bar_chart(categories, values)
+# plotter.create_pie_chart(sizes, labels)
+# plotter.create_histogram(y)

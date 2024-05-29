@@ -4,27 +4,6 @@ import datetime
 from src.utils import generate_uuid
 
 
-def model_to_dict(model_instance):
-    """
-    将ORM模型实例转换为字典
-    Args:
-        model_instance:
-
-    Returns:
-
-    """
-    columns = model_instance.__mapper__.columns
-    result = {}
-    for column in columns:
-        attr_name = column.key
-        value = getattr(model_instance, attr_name)
-        # 处理默认值和函数默认值，例如服务器时间默认值，这里直接取值
-        if callable(value):
-            value = value()
-        result[attr_name] = value
-    return result
-
-
 def generate_mysql_flight_alarm(parsed_flight_data, time_str):
     """
     Generate a mysql flight data
@@ -151,7 +130,7 @@ def generate_mysql_gnss_data(parsed_gnss_data):
         'pitch': parsed_gnss_data[21],
         'checksum': parsed_gnss_data[22],
         'is_delete': 0,
-        'create_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        'update_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
     return gnss_data
 
@@ -239,16 +218,3 @@ if __name__ == '__main__':
     # print(target_byte)
     a, b, c = parse_gnss_data(target_byte)
     print(a, b, c)
-    # 转换为字典
-    # 假设你有一个FlightData的实例
-    # flight_data_instance = FlightData()
-    # flight_data_dict = model_to_dict(flight_data_instance)
-    # print(flight_data_dict)
-
-    # flight_alarm_instance = FlightAlarm()
-    # flight_alarm_dict = model_to_dict(flight_alarm_instance)
-    # print(flight_alarm_dict)
-
-    # gnss_data_instance = GNSSData()
-    # gnss_data_dict = model_to_dict(gnss_data_instance)
-    # print(gnss_data_dict)

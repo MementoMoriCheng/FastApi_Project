@@ -1,0 +1,11 @@
+{
+  "query": [
+    {
+      "key": [
+        "key_word"
+      ],
+      "value": null,
+      "operator": "includes"
+    }
+  ]
+}

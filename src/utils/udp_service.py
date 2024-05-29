@@ -12,7 +12,8 @@ from src.utils.logger import logger
 from src.config.setting import settings
 from src.utils.sql_config import sql_handle
 from src.utils.ftp_util import RemoteFTPService
-from src.utils.analyzing_gnss import split_gnss_data, parse_gnss_data, generate_mysql_gnss_data
+from src.utils.analyzing_satellite_data import split_gnss_data, parse_gnss_data, generate_mysql_gnss_data, \
+    generate_mysql_flight_data, generate_mysql_flight_alarm
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
@@ -106,7 +107,7 @@ class UDPService:
 
         """
 
-        print(f'UDP Server Received Data From Client, Address: {client_address}, Data:{data}')
+        print(f'UDP Client Received Data From Server, Address: {client_address}')
         try:
             split_strings = split_gnss_data(data)
             first_byte = split_strings[0]
@@ -116,9 +117,15 @@ class UDPService:
                 os.makedirs(local_path)
             parsed_gnss_data, time_str, identify_code = parse_gnss_data(first_byte)
 
-            gnss_data = generate_mysql_gnss_data(parsed_gnss_data)
-            await sql_handle.add_records("gnss_data", gnss_data)
-        #
+            # gnss_data = generate_mysql_gnss_data(parsed_gnss_data)
+            # await sql_handle.add_records("gnss_data", gnss_data)
+
+            # flight_data = generate_mysql_flight_data(parsed_gnss_data, time_str)
+            # await sql_handle.add_records("flight_data", flight_data)
+            #
+            # alarm_data = generate_mysql_flight_alarm(parsed_gnss_data, time_str)
+            # await sql_handle.add_records("flight_alarm", alarm_data)
+
         #     # TODO 文件名要按指定格式？
         #     from datetime import datetime
         #     time_ = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -145,6 +152,9 @@ class UDPService:
         #         finally:
         #             ftp_util.remote_ftp_close()
         #     shutil.rmtree(local_path)
+        except IndexError:
+            print(f'Received Data is : {data.decode("utf-8")}')
+            return
         except Exception as error:
             logger.error(error)
             return

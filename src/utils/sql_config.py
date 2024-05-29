@@ -10,9 +10,9 @@ from src.db.config import session
 from src.utils.logger import logger
 from src.static import column_type, update_column_type
 from sqlalchemy import (Column, MetaData, Table, text, String,
-                        PrimaryKeyConstraint, create_engine, and_, select)
+                        PrimaryKeyConstraint, create_engine, and_, select, inspect)
 from sqlalchemy.orm import sessionmaker
-from src.utils.constant import LOG_RECORDS, GNSS_RECORDS
+from src.utils.constant import LOG_RECORDS, GNSS_RECORDS, FLIGHT_DATA, FLIGHT_ALARM
 
 database_uri = f"{settings.DATABASE_URI}/{settings.DB_NAME}"
 
@@ -35,7 +35,8 @@ class SqlHandle(object):
     def _get_table(self, table_name):
         return Table(table_name, self.metadata, autoload_with=self.engine)
 
-    def _process_condition(self, column, operator, operand):
+    @staticmethod
+    def _process_condition(column, operator, operand):
         """
         处理过滤条件
         Args:
@@ -94,12 +95,27 @@ class SqlHandle(object):
             primary_key_columns = result.fetchall()
             return primary_key_columns
 
-    async def get_table_info(self, table_name="column_manage"):
-        create_table_sql = f'select * from {table_name};'
-        async with self.async_session_factory() as session_exc:
-            result = await session_exc.execute(create_table_sql)
-            rows = result.fetchall()
-            return rows
+    async def get_table_columns(self, table_name):
+        result = {}
+        table = self._get_table(table_name)
+        columns = [column.name for column in table.columns]
+        for column in columns:
+            result[column] = None
+        return result
+
+    async def batch_insert(self, table_name, data_list):
+        try:
+            with self.get_sync_session() as session:
+                table = self._get_table(table_name)
+                for data in data_list:
+                    insert_statement = table.insert().values(**data)
+                    session.execute(insert_statement)
+                session.commit()
+
+        except SQLAlchemyError as e:
+            logger.error(f"Batch Insertion error for table {table_name}: {e}")
+            session.rollback()
+            raise e
 
     async def insert_only(self, table_name, data):
         try:
@@ -295,6 +311,38 @@ class SqlHandle(object):
         finally:
             session.close()
 
+    def downgrade_columns(self, table_name, columns):
+        """
+        删除列
+        Args:
+            table_name:
+            columns:
+
+        Returns:
+
+        """
+        inspector = inspect(self.engine)
+        table_columns = inspector.get_columns(table_name)
+        existing_columns = {col['name'] for col in table_columns}
+        foreign_keys = inspector.get_foreign_keys(table_name)
+
+        for column_name in columns:
+            if column_name in existing_columns:
+
+                fk_to_drop = [fk for fk in foreign_keys if fk['constrained_columns'][0] == column_name]
+                for fk in fk_to_drop:
+                    fk_name = fk['name']
+                    fk_drop_sql = f"ALTER TABLE {table_name} DROP FOREIGN KEY {fk_name};"
+                    self.execute_stmt(fk_drop_sql)
+                    logger.warning(f"foreign key'{fk_name}'is removed from'{table_name}'")
+
+                drop_column_sql = f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
+                self.execute_stmt(drop_column_sql)
+                logger.warning(f"column'{column_name}'is removed from'{table_name}'")
+                existing_columns.remove(column_name)
+            else:
+                logger.error(f"column'{column_name}'is not in '{table_name}'")
+
     async def change_columns(self, table_name, old_column_name, obj_in):
         """
         修改列
@@ -302,13 +350,15 @@ class SqlHandle(object):
             table_name:
             old_column_name:
             obj_in:
-
         Returns:
 
         """
         update_data = obj_in.dict(exclude_none=True)
         new_column_name = update_data.get("code")
-        new_column_type = update_data.get("type")
+        if obj_in.type == "file":
+            new_column_type = column_type.get(obj_in.type)
+        else:
+            new_column_type = update_data.get("type")
         is_pk = update_data.get("primary")
         is_empty = update_data.get("empty")
         is_unique = update_data.get("unique")
@@ -325,15 +375,18 @@ class SqlHandle(object):
             self.execute_stmt(rename_sql)
         if is_pk:
             pk_info = await self.get_primary_key(table_name)
-            pk_name, pk_type, pk_length = pk_info[0][0], pk_info[0][1], pk_info[0][2]
+            if pk_info:
+                pk_name, pk_type, pk_length = pk_info[0][0], pk_info[0][1], pk_info[0][2]
+                drop_pk_sql = f"ALTER TABLE {table_name} DROP PRIMARY KEY;"
+                drop_pk_increment_sql = f"ALTER TABLE {table_name} MODIFY COLUMN {pk_name} {pk_type} ({pk_length});" \
+                    if pk_length else f"ALTER TABLE {table_name} MODIFY COLUMN {pk_name} {pk_type};"
+                self.execute_stmt(drop_pk_increment_sql)
+                self.execute_stmt(drop_pk_sql)
+
             pk_sql = f"ALTER TABLE {table_name} ADD PRIMARY KEY ({column_name});"
-            drop_pk_sql = f"ALTER TABLE {table_name} DROP PRIMARY KEY;"
-            drop_pk_increment_sql = f"ALTER TABLE {table_name} MODIFY COLUMN {pk_name} {pk_type} ({pk_length});" \
-                if pk_length else f"ALTER TABLE {table_name} MODIFY COLUMN {pk_name} {pk_type};"
-            self.execute_stmt(drop_pk_increment_sql)
-            self.execute_stmt(drop_pk_sql)
             self.execute_stmt(pk_sql)
-            self.execute_stmt(drop_pk_increment_sql)
+            # self.execute_stmt(drop_pk_increment_sql)
+
         if not is_empty:
             is_empty_sql = f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type}({varchar_len}) NOT NULL;" \
                 if varchar_len else f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type} NOT NULL;"
@@ -348,14 +401,21 @@ class SqlHandle(object):
 
     def add_foreign_key(self, main_table_name, main_column, association):
         for relative_table_info in association:
-            relative_table_name = "auto_" + relative_table_info.get("tableCode")
-            if main_table_name == relative_table_name:
-                continue
-            relative_column = 'id'
-            add_index_sql = f"ALTER TABLE {relative_table_name} ADD INDEX ({relative_column});"
-            self.execute_stmt(add_index_sql)
-            add_foreign_key_sql = f"ALTER TABLE {main_table_name} ADD FOREIGN KEY ({main_column}) REFERENCES {relative_table_name} ({relative_column});"
-            self.execute_stmt(add_foreign_key_sql)
+            multiple = relative_table_info.get("multiple")  # 是否支持多选
+            if multiple:
+                relative_intermediate_table_name = "intermediate_table"
+                correlation_id = "correlation_id"
+                add_correlation_index_sql = f"ALTER TABLE {relative_intermediate_table_name} ADD INDEX ({correlation_id});"
+                self.execute_stmt(add_correlation_index_sql)
+                add_correlation_foreign_key_sql = f"ALTER TABLE {main_table_name} ADD FOREIGN KEY ({main_column}) REFERENCES {relative_intermediate_table_name} ({correlation_id});"
+                self.execute_stmt(add_correlation_foreign_key_sql)
+            else:
+                relative_table_name = "auto_" + relative_table_info.get("tableCode")
+                relative_column = 'id'
+                add_index_sql = f"ALTER TABLE {relative_table_name} ADD INDEX ({relative_column});"
+                self.execute_stmt(add_index_sql)
+                add_foreign_key_sql = f"ALTER TABLE {main_table_name} ADD FOREIGN KEY ({main_column}) REFERENCES {relative_table_name} ({relative_column});"
+                self.execute_stmt(add_foreign_key_sql)
 
     def execute_stmt(self, sql_stmt):
         modify_sql_stmt = text(sql_stmt)
@@ -391,9 +451,15 @@ class SqlHandle(object):
             if table_name == "log_manage":
                 LOG_RECORDS.update(records)
                 await self.insert_only(table_name, LOG_RECORDS)
-            else:
+            elif table_name == "gnss_data":
                 GNSS_RECORDS.update(records)
                 await self.insert_only(table_name, GNSS_RECORDS)
+            elif table_name == "flight_data":
+                FLIGHT_DATA.update(records)
+                await self.insert_only(table_name, FLIGHT_DATA)
+            elif table_name == "flight_alarm":
+                FLIGHT_ALARM.update(records)
+                await self.insert_only(table_name, FLIGHT_ALARM)
         except Exception as e:
             logger.error(f"{e}")
 

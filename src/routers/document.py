@@ -179,21 +179,20 @@ async def upload_files_to_ftp(
     document_dal.setDb(Document)
     document_infos = await document_dal.buck_create(document_objs)
     document_ids = [con.id for con in document_infos]
-    if table_code != "course_source":
-        table_name = f"auto_{table_code}"
-        conditions = {"id": id_}
-        file_object = await sql_handle.select(table_name, conditions=conditions, fields=[col_name])
-        if not file_object:
-            return resp_404()
-        data = file_object[0]
-        con = json.loads(data[col_name]) if data[col_name] else []
-        document_ids.extend(con)
+    table_name = f"auto_{table_code}"
+    conditions = {"id": id_}
+    file_object = await sql_handle.select(table_name, conditions=conditions, fields=[col_name])
+    if not file_object:
+        return resp_404()
+    data = file_object[0]
+    con = json.loads(data[col_name]) if data[col_name] else []
+    document_ids.extend(con)
 
-        updated_data = {col_name: json.dumps(document_ids)}
-        try:
-            await sql_handle.update(table_name, conditions, updated_data)
-        except SQLAlchemyError as e:
-            return resp_400(msg=f"{e}")
+    updated_data = {col_name: json.dumps(document_ids)}
+    try:
+        await sql_handle.update(table_name, conditions, updated_data)
+    except SQLAlchemyError as e:
+        return resp_400(msg=f"{e}")
     return resp_200(data=document_ids, msg="Files have been uploaded successfully.")
 
 

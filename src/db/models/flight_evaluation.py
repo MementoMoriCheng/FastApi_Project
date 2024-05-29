@@ -122,3 +122,5 @@ class FlightEvaluationResult(Base):
     create_time = Column(DateTime, server_default=func.now())
 
     __mapper_args__ = {"eager_defaults": True}
+
+# TODO 飞行评估中有关联课目的项待完成 ：飞行动作字典，总成绩，分项成绩

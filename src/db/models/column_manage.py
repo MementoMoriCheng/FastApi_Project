@@ -25,7 +25,8 @@ class ColumnManage(Base):
     __tablename__ = 'column_manage'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    table_id = Column(String(36), ForeignKey("table_manage.id", ondelete="CASCADE"), nullable=False, comment="属于哪个表")
+    table_id = Column(String(36), ForeignKey("table_manage.id", ondelete="CASCADE"), nullable=False,
+                      comment="属于哪个表")
 
     merge_name = Column(String(64), comment="多列合并使用同一个merge_name(仅前端可用到)")
     parent = Column(String(36), comment="父级字段")
@@ -51,5 +52,17 @@ class ColumnManage(Base):
     update_time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"))
 
     table_manage = relationship("TableManage", back_populates="column_manage")
+
+    __mapper_args__ = {"eager_defaults": True}
+
+
+class IntermediateTable(Base):
+    """中间表"""
+    __tablename__ = 'intermediate_table'
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    data_id = Column(String(36), comment="数据 id")
+    correlation_id = Column(String(36), comment="关联 id")
+    create_time = Column(DateTime, server_default=func.now())
 
     __mapper_args__ = {"eager_defaults": True}

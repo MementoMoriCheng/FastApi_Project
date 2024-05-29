@@ -1,7 +1,11 @@
 import asyncio
 import json
+from json import JSONDecodeError
+
 import websockets
 import threading
+
+from src.utils.constant import FLIGHT_DATA_TABLE, RESERVE
 from src.utils.logger import logger
 from src.config.setting import settings
 from src.utils.sql_config import sql_handle
@@ -75,24 +79,31 @@ class WebSocketService:
                 recv_text = await websocket.recv()
                 if isinstance(recv_text, str) and len(recv_text) > 0:
                     Clients.add(websocket)
-
-                # TODO 鉴别用户并发信息
-                # if data["type"] == 'send':
-                #     name = '404'
-                #     for k, v in Clients.items():
-                #         if v == websocket:
-                #             name = k
-                #     data["from"] = name
-                #     if len(Clients) != 0:  # asyncio.wait doesn't accept an empty list
-                #         message = json.dumps({"type": "send", "content": data["content"], "from": name})
-                #         await self.runCaseX(jsonMsg=message, websocket=websocket)
-
+                # 鉴别回放数据/实时数据
+                recv_data = json.loads(recv_text)
+                print(f"Received Data From Client:{recv_text}")
                 gnss_fields = settings.GNSS_FIELDS.split(',')
-                data_info = await sql_handle.select("gnss_data", limit=1, fields=gnss_fields,
-                                                    order_by={"create_time": True})
+                select_condition = {"identify_code": recv_data.get("code"), "is_delete": RESERVE}
 
-                message = json.dumps({"type": "send", "content": data_info[0] if data_info else " "})
-                await self.callback_send(message, websocket=websocket)
+                if recv_data["playback"]:
+                    way_point = recv_data["way_point"] if recv_data.get("way_point") else 10
+                    data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition,
+                                                        fields=gnss_fields,
+                                                        order_by={"gps_milliseconds": True})
+                    for data in range(1, len(data_info), len(data_info) // way_point):
+                        message = json.dumps({"type": "send", "content": data_info[data] if data else " "})
+                        await self.callback_send(message, websocket=websocket)
+                else:
+                    data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition, limit=1,
+                                                        fields=gnss_fields,
+                                                        order_by={"gps_milliseconds": False})
+                    message = json.dumps({"type": "send", "content": data_info[0] if data_info else " "})
+
+                    update_condition = {"id": data_info[0]["id"]}
+                    data_info[0]["is_delete"] = 1
+                    await sql_handle.update(FLIGHT_DATA_TABLE, update_condition, data_info[0])
+
+                    await self.callback_send(message, websocket=websocket)
 
             # 链接断开
             except websockets.ConnectionClosed:
@@ -107,7 +118,7 @@ class WebSocketService:
                     Clients.remove(websocket)
                 break
             # 报错
-            except Exception as e:
+            except (Exception, JSONDecodeError) as e:
                 logger.error("WSlinkError ", e)
                 if websocket in Clients:  # 先检查连接是否存在
                     Clients.remove(websocket)

@@ -90,8 +90,6 @@ class RemoteFTPService:
 
     async def download_ftp_file(self, filename, db_name, remote_filename):
         self.ftp.set_pasv(True)
-        # base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        # local_file_path = os.path.join(base_dir, "tmp", filename)
         local_file_path = os.path.join(settings.LOCAL_DOWNLOAD_FILE_PATH, filename)
         with open(local_file_path, 'wb') as f:
             self.ftp.retrbinary(f'RETR {remote_filename}', f.write)

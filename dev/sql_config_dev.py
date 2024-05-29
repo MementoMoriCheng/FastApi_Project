@@ -13,12 +13,12 @@ from src.db.config import session
 from src.utils.logger import logger
 from src.static import column_type
 from sqlalchemy import (Column, Integer, String, Date, MetaData, Table, text,
-                        PrimaryKeyConstraint, create_engine, and_, select)
+                        PrimaryKeyConstraint, create_engine, and_, select, inspect)
 from sqlalchemy.orm import sessionmaker
 
 # database_uri = f"{settings.DATABASE_URI}/{settings.DB_NAME}"
-# database_uri = "mysql+pymysql://root:123456@localhost:3306/flyingTrainingDB"
-database_uri = "mysql+pymysql://root:123456@localhost:3306/flight_test"
+database_uri = "mysql+pymysql://root:123456@localhost:3306/flyingTrainingDB"
+# database_uri = "mysql+pymysql://root:123456@localhost:3306/flight_test"
 metadata = MetaData()
 
 
@@ -66,37 +66,50 @@ class SqlHandle(object):
             return column.is_(None)
         elif operator == "not_isEmpty":
             return column.isnot(None)
+        elif operator == "in":
+            if isinstance(operand, list) or isinstance(operand, tuple):
+                return column.in_(operand)
+            else:
+                # logger.error(f"In operator requires a list or tuple operand, but got {type(operand)}")
+                raise ValueError(f"In operator requires a list or tuple operand, but got {type(operand)}")
         else:
             raise ValueError(f"Unsupported operator: {operator}")
 
-    async def get_col_type(self, table_name):
+    async def get_primary_key(self, table_name):
         get_col_sql = f"""SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE,
                             COLUMN_KEY, EXTRA FROM information_schema.columns WHERE 
-                            TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}'; """
+                            TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}' AND COLUMN_KEY = 'PRI'; """
         async with self.async_session_factory() as session_exc:
             result = await session_exc.execute(get_col_sql)
-            rows = result.fetchall()
-            return rows
+            primary_key_columns = result.fetchall()
+            return primary_key_columns
 
-    async def get_table_info(self, table_name="column_manage"):
-        create_table_sql = f'select * from {table_name};'
-        async with self.async_session_factory() as session_exc:
-            result = await session_exc.execute(create_table_sql)
-            rows = result.fetchall()
-            return rows
+    async def get_table_info(self, table_name):
+        result = {}
+        table = self._get_table(table_name)
+        columns = [column.name for column in table.columns]
+        for column in columns:
+            result[column] = None
+        return result
 
-    async def insert(self, table_name, data):
+    async def insert_only(self, table_name, data):
         try:
             with self.get_sync_session() as session:
                 table = self._get_table(table_name)
                 insert_statement = table.insert().values(**data)
                 session.execute(insert_statement)
                 session.commit()
+
         except SQLAlchemyError as e:
             logger.error(f"Insertion error for table {table_name}: {e}")
             session.rollback()
             print(traceback.print_exc())
             return
+
+    async def insert(self, table_name, data):
+        await self.insert_only(table_name, data)
+        inserted_data_id = await self.select(table_name, conditions=data, fields=['id'])
+        return inserted_data_id
 
     async def update(self, table_name, conditions, updated_data):
         try:
@@ -142,9 +155,9 @@ class SqlHandle(object):
                     condition_clauses = []
                     for k, v in conditions.items():
                         if isinstance(v, dict):  # 处理包含操作符的对象
-                            operator = v["value"]
-                            operand = v.get("operand")
-                            condition_clauses.append(self._process_condition(getattr(table.c, k), operator, operand))
+                            value = v["value"]
+                            operator = v.get("operator")
+                            condition_clauses.append(self._process_condition(getattr(table.c, k), operator, value))
                         else:  # 默认为等于操作
                             condition_clauses.append(getattr(table.c, k) == v)
 
@@ -236,20 +249,28 @@ class SqlHandle(object):
         """
         删除列
         """
-        exclude_columns = tuple(columns) if len(columns) > 1 else tuple(columns) + ('',)
+        inspector = inspect(self.engine)
+        table_columns = inspector.get_columns(table_name)
+        existing_columns = {col['name'] for col in table_columns}
+        foreign_keys = inspector.get_foreign_keys(table_name)
 
-        columns_query = f"""
-                SELECT COLUMN_NAME
-                FROM information_schema.columns
-                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}' AND COLUMN_NAME NOT IN {exclude_columns}
-            """
-        columns_result = session.execute(columns_query)
-        select_columns = ', '.join(row[0] for row in columns_result)
-        query = f"SELECT {select_columns} FROM {table_name}"
+        for column_name in columns:
+            if column_name in existing_columns:
 
-        result = session.execute(query)
-        for row in result:
-            print(row)
+                # 先检查并尝试删除与该列相关的外键约束
+                fk_to_drop = [fk for fk in foreign_keys if fk['constrained_columns'][0] == column_name]
+                for fk in fk_to_drop:
+                    fk_name = fk['name']
+                    fk_drop_sql = f"ALTER TABLE {table_name} DROP FOREIGN KEY {fk_name};"
+                    self.execute_stmt(fk_drop_sql)
+                    print(f"外键约束'{fk_name}'已从表'{table_name}'中删除。")
+
+                drop_column_sql = f"ALTER TABLE {table_name} DROP COLUMN {column_name};"
+                self.execute_stmt(drop_column_sql)
+                print(f"列'{column_name}'已从表'{table_name}'中删除。")
+                existing_columns.remove(column_name)
+            else:
+                print(f"列'{column_name}'不在表'{table_name}'中，跳过删除。")
 
     def change_columns(self, table_name, old_column_name, obj_in):
         """
@@ -282,8 +303,11 @@ class SqlHandle(object):
             self.execute_stmt(unique_sql)
 
     def add_foreign_key(self, main_table_name, main_column, association):
-        relative_column = "id"
-        for relative_table_name in association:
+        for relative_table_info in association:
+            relative_table_name = "auto_" + relative_table_info.get("tableCode")
+            relative_column = relative_table_info.get("tableCol")
+            add_index_sql = f"ALTER TABLE {relative_table_name} ADD INDEX ({relative_column});"
+            self.execute_stmt(add_index_sql)
             add_foreign_key_sql = f"ALTER TABLE {main_table_name} ADD FOREIGN KEY ({main_column}) REFERENCES {relative_table_name} ({relative_column});"
             self.execute_stmt(add_foreign_key_sql)
 
@@ -306,9 +330,26 @@ class SqlHandle(object):
 sql_handle = SqlHandle()
 
 if __name__ == "__main__":
+    from pprint import pprint
+
     sql_handle = SqlHandle()
-    # asyncio.run(sql_handle.get_table_info("table_test"))
-    # asyncio.run(sql_handle.get_col_type("table_manage"))
+
+    # query_params_mapping = {'file_ids__contains': id_}
+    # file_res = await course_source_dal.get_by_all(**query_params_mapping)
+    #
+    aa = asyncio.run(sql_handle.get_table_info("auto_flight_action"))
+    print(aa)
+    # aa = asyncio.run(sql_handle.get_primary_key("table_manage"))
+    # print(aa)
+    # table_name = "table_manage"
+    #
+    #
+    # get_col_sql = f"""SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE,
+    #                             COLUMN_KEY, EXTRA FROM information_schema.columns WHERE
+    #                             TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{table_name}' AND COLUMN_KEY = 'PRI'; """
+    #
+    # aa = sql_handle.execute_stmt(get_col_sql)
+    # print(aa)
     # sql_handle.get_tables()
     # sql_handle.upgrade_columns('airforce', 'worker2', "str 64")
     # association = [
@@ -338,7 +379,7 @@ if __name__ == "__main__":
     # sql_handle.create_dynamic_table_core(table_name, columns_config)
 
     # sql_handle.get_col_type('table_test')
-    # sql_handle.downgrade_columns('table_test', ['salary2', 'salary3'])
+    # sql_handle.downgrade_columns('auto_ms_test', ['code'])
     # update_data = {
     #     "name": "actor",
     #     "parent": "0f525cf1-510e-4c74-a80c-d2325844072a",
@@ -360,13 +401,28 @@ if __name__ == "__main__":
     # sql_handle.change_columns('airforce', 'worker2', update_data,
     #                           )
     # 查询 "airforce" 表中的记录
-    # select_conditions = {"id": 1}
-    # # selected_records = sql_handle.select("table_manage")
+    # select_conditions = {"code": 'newuser',
+    #                      "planetest333": 'yes'}
+    # select_conditions = {
+    #     "course_chapter_id": {"value": ['206bf553-0499-4c56-8160-14c524b44e86', '208e6915-b3ef-4e44-9165-f0d94fd602bd'],
+    #                           "operator": "in"}}
+    # select_conditions = {
+    #     "course_chapter_id": {"value": ['utBLMIBCTN4heLOYFqhyfKc5PnZGIoHFxJyE', 'tuOKtd7MXDbaqaXxcwkJ1E4wN8Y0vHK2hhkn'],
+    #                           "operator": "in"},
+    # }
+    # selected_records = sql_handle.select("table_manage")
     # selected_records = asyncio.run(sql_handle.select("table_manage"))
-    # print(selected_records)
-
-    # insert_data = {"item": "newuser1", "id": 2, "worker1": "tom"}
-    # asyncio.run(sql_handle.insert("airforce", insert_data))
+    # pprint(selected_records)
+    # for i in selected_records:
+    #     table_name = f"auto_{i['code']}"
+    #     add_column_sql = f"""ALTER TABLE {table_name}
+    # ADD COLUMN create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    # ADD COLUMN update_time TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;"""
+    # print(add_column_sql)
+    # sql_handle.execute_stmt(add_column_sql)
+    # insert_data = {"serial_num": "CJ9000", "aircraft_card": '005'}
+    # di = asyncio.run(sql_handle.insert("auto_plane", insert_data))
+    # print(di)
 
     # 更新 "airforce" 表中的记录
     # update_conditions = {"item": "newuser"}
@@ -376,8 +432,7 @@ if __name__ == "__main__":
     # 删除 "users" 表中的记录
     # delete_conditions = {"item": "newuser"}
     # asyncio.run(sql_handle.delete("airforce", delete_conditions))
-    from pprint import pprint
-    #
+
     # conditions = {
     #     "username": "李狗蛋111",
     #     "password": "123456111",
@@ -387,8 +442,8 @@ if __name__ == "__main__":
     #     ]
     # }
     # conditions = {"id": "1c9d2da3-6ca0-464d-a8fe-affae6473c3e"}
-    # data = asyncio.run(sql_handle.insert("users", conditions))
-    # pprint(data)
+    # sql_handle.add_foreign_key("auto_ms_test", "f_code", [{"tableCode": "mementomori", "tableCol": "code"}])
+
     from src.utils import generate_uuid
     from datetime import datetime
     import json
@@ -422,15 +477,15 @@ if __name__ == "__main__":
     #             q_list.append(copy.copy(conditions))
     # pprint(q_list)
 
-    src_path = "D:\\File\\Variflight_CZ3655_20240409.json"
-    with open(src_path, "r") as file:
-        data = json.load(file)
+    # src_path = "D:\\File\\Variflight_CZ3655_20240409.json"
+    # with open(src_path, "r") as file:
+    #     data = json.load(file)
 
     gnss_data = {
-        'id': '',
-        'sync_code1': [0],
-        'sync_code2': [1],
-        'sync_code3': [2],
+        'id': '36397920-e72a-435f-8b58-1cb2829c07d8',
+        'sync_code1': [12],
+        'sync_code2': [13],
+        'sync_code3': [24],
         'identify_code': [3],
         'gps_week': [4],
         'gps_milliseconds': [5],
@@ -447,15 +502,18 @@ if __name__ == "__main__":
         'solution_satellite_count': [16],
         'differential_age': [17],
         'azimuth': [18],
-        'pitch': [19],
+        'pitch': [19.12418],
         'checksum': [20],
         'is_delete': 0,
         'create_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    for con in data:
-        gnss_data.update(id=generate_uuid(), identify_code=int(con['fnum']), latitude=con['latitude'], longitude=con['longitude'],
-                         azimuth=con['angle'], altitude=con['height'], horizon_speed=con['speed'])
-        # print(con)
-        # print(gnss_data)
-        asyncio.run(sql_handle.insert("gnss_data", gnss_data))
+    # for con in data:
+    #     gnss_data.update(id=generate_uuid(), identify_code=int(con['fnum']), latitude=con['latitude'], longitude=con['longitude'],
+    #                      azimuth=con['angle'], altitude=con['height'], horizon_speed=con['speed'])
+    # #     # print(con)
+    # #     # print(gnss_data)
+    #     aa = asyncio.run(sql_handle.insert("gnss_data", gnss_data))
+    #     print(aa)
+    # aa = asyncio.run(sql_handle.insert("gnss_data", gnss_data))
+    # print(aa)

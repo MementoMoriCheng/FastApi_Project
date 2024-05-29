@@ -74,5 +74,12 @@ class Settings(BaseSettings):
     SYNC_USER_URL: str = dotenv_config.get("SYNC_USER_URL")
     UNSYNC_USER_URL: str = dotenv_config.get("UNSYNC_USER_URL")
 
+    QUESTION_TYPE_TABLE: str = dotenv_config.get("QUESTION_TYPE_TABLE")
+    QUESTION_TYPE: str = dotenv_config.get("QUESTION_TYPE")
+
+    EXAMINATION: str = dotenv_config.get("EXAMINATION")
+    PAPER: str = dotenv_config.get("PAPER")
+    ONLINE_LEARNING: str = dotenv_config.get("ONLINE_LEARNING")
+
 
 settings = Settings()
