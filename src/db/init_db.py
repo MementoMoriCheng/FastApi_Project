@@ -30,6 +30,25 @@ def init_database():
     db_engine.execute(sql_cmd)
 
 
+async def drop_all_table():
+    db_engine = create_engine(settings.DATABASE_URI + "/" + settings.DB_NAME)
+    sql_cmd = 'SHOW TABLES;'
+    tables = db_engine.execute(sql_cmd)
+    all_tables = tables.fetchall()
+
+    for i in range(len(all_tables)):
+        for item in all_tables:
+            table_name = item[0]
+            if table_name == "data_handle":
+                continue
+            sql = f'DROP TABLE IF EXISTS {table_name};'
+            # print(sql)
+            try:
+                db_engine.execute(sql)
+            except:
+                continue
+
+
 async def init_table(drop=""):
     async with engine.begin() as conn:
         if drop == "drop":
@@ -37,10 +56,25 @@ async def init_table(drop=""):
         await conn.run_sync(Base.metadata.create_all)
 
 
+async def create_tables(tables=[], drop=""):
+    table_dict = dict(Base.metadata.tables)
+    table_list = []
+    for key in table_dict.keys():
+        if key not in tables:
+            continue
+        table_list.append(table_dict[key])
+
+    async with engine.begin() as conn:
+        if drop == "drop":
+            await conn.run_sync(Base.metadata.drop_all, tables=table_list)
+        await conn.run_sync(Base.metadata.create_all, tables=table_list)
+
+
 def init_db(drop=""):
     init_database()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(init_table(drop))
+    # loop.run_until_complete(create_tables(["data_handle"]))
 
 
 if __name__ == '__main__':

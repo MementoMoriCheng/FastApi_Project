@@ -111,3 +111,18 @@ async def fetch_external_data(url: str, data):
             return response.json()
         else:
             return {"error": "Failed to fetch external data"}
+
+
+async def fetch_external_upload_file(url: str, file_path, user_id=None, extra_data=None):
+    async with httpx.AsyncClient() as client:
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            url = f"{url}?user_id={user_id}&extra_data={extra_data}"
+            response = await client.post(
+                headers={"Authorization": f"Bearer {generate_service_token()}"},
+                url=url, files=files, data={}, timeout=None
+            )
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"error": "Failed to fetch external data"}

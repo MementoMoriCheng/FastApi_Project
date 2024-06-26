@@ -11,8 +11,4 @@ from src.db.models.menu_manage import MenuManage
 from src.db.models.log_manage import LogManage
 from src.db.models.document import Document
 from src.db.models.aircraft_data import GNSSData, FlightData, FlightAlarm
-from src.db.models.examination import Examination
-from src.db.models.exam_question import Questions
-from src.db.models.exam_paper import Paper, PaperQuestions
-from src.db.models.exam_result import ExamResult, ExamResultDetail
-from src.db.models.course import CourseSource, TeachingJournal, CourseSchedule, CourseChapter, OnlineLearningRecord
+from src.db.models.data_handle import DataHandle

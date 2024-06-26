@@ -5,10 +5,12 @@
 # @File    :
 # @Software: PyCharm
 # @desc    : 飞行数据工具类
+import pytz
+import pandas as pd
+from datetime import date
 from astral.sun import sun
 from astral import LocationInfo
-from datetime import date
-import pytz
+from src.config.setting import settings
 
 
 class AstralTimeCalculator:
@@ -57,17 +59,107 @@ class AstralTimeCalculator:
         }
 
 
+class RecognitionAndEvaluationAlgorithm:
+    """
+    飞行动作识别与评估算法
+    """
+
+    def __init__(self):
+        pass
+
+    def load_flight_data(self, file_path):
+        """
+        飞行数据中读取并解析关键的飞行参数
+        Args:
+            file_path:
+
+        Returns:
+
+        """
+        # 假设数据存储在CSV文件中
+        return pd.read_csv(file_path)
+
+    def recognition_phase(self, data):
+        """
+        根据速度、高度和时间拆分为三个阶段（起飞、任务、着陆段）
+        Args:
+            data:
+
+        Returns:
+
+        """
+        # 这里需要定义具体的条件来分割飞行阶段，例如基于时间或高度的变化
+        takeoff, mission, landing = None, None, None
+        # 实现逻辑来确定每个阶段的数据范围
+        return takeoff, mission, landing
+
+    def recognition_action(self, data):
+        """
+        进行动作识别
+        Args:
+            data:
+
+        Returns:
+
+        """
+        actions = []
+        for index, row in data.iterrows():
+            # 根据滑跑、抬前轮、离地等条件判断并添加动作到actions列表
+            pass
+        return actions
+
+    def recognition_action_phase(self, action_data):
+        """
+        动作识别的三个阶段（分进入、保持和改出阶段）
+        Args:
+            action_data:
+
+        Returns:
+
+        """
+        enter_phase, hold_phase, exit_phase = [], [], []
+        # 根据坡度、俯仰角等变化来划分动作阶段
+        return enter_phase, hold_phase, exit_phase
+
+    def evaluate_action_phase(self, phase_data, standards):
+        """
+        根据评估标准库对各阶段进行打分
+        Args:
+            phase_data:
+            standards:
+
+        Returns:
+
+        """
+        score = 0
+        # 根据实际飞行数据和标准库中的阈值比较来打分
+        return score
+
+    def calculate_total_score(self, scores):
+        """
+        计算所有打分的平均分作为该架次的总分
+        Args:
+            scores:
+
+        Returns:
+
+        """
+        if scores:
+            return sum(scores) / len(scores)
+        return 0
+
+
 if __name__ == "__main__":
     import asyncio
 
     # 使用示例
     calculator = AstralTimeCalculator(
-        city_name="Beijing",
-        country="China",
-        region="Asia/Shanghai",
-        latitude=39.9042,
-        longitude=116.4074,
-        timezone_str="Asia/Shanghai"
+        city_name=settings.CITY_NAME,
+        country=settings.COUNTRY,
+        region=settings.REGION,
+        latitude=float(settings.LATITUDE),
+        longitude=float(settings.LONGITUDE),
+        timezone_str=settings.TIMEZONE_STR
     )
 
     # 获取今天在北京的天文时间

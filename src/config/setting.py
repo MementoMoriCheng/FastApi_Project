@@ -80,6 +80,30 @@ class Settings(BaseSettings):
     EXAMINATION: str = dotenv_config.get("EXAMINATION")
     PAPER: str = dotenv_config.get("PAPER")
     ONLINE_LEARNING: str = dotenv_config.get("ONLINE_LEARNING")
+    QUESTION_BANK: str = dotenv_config.get("QUESTION_BANK")
+    TEACHING_RESOURCE: str = dotenv_config.get("TEACHING_RESOURCE")
+
+    FLIGHT_PLAN_CONTENT: str = dotenv_config.get("FLIGHT_PLAN_CONTENT")
+    FLIGHT_PLAN_BASE: str = dotenv_config.get("FLIGHT_PLAN_BASE")
+    FLIGHT_PLAN_PILOT: str = dotenv_config.get("FLIGHT_PLAN_PILOT")
+    FLIGHT_PLAN_PLANE: str = dotenv_config.get("FLIGHT_PLAN_PLANE")
+    FLIGHT_PLAN_SUBJECT: str = dotenv_config.get("FLIGHT_PLAN_SUBJECT")
+    FLIGHT_SUBJECT_DETAILS: str = dotenv_config.get("FLIGHT_SUBJECT_DETAILS")
+    STUDENT_TABLE: str = dotenv_config.get("STUDENT_TABLE")
+    PLANE_TABLE: str = dotenv_config.get("PLANE_TABLE")
+
+    CITY_NAME: str = dotenv_config.get("CITY_NAME")
+    COUNTRY: str = dotenv_config.get("COUNTRY")
+    REGION: str = dotenv_config.get("REGION")
+    LATITUDE: str = dotenv_config.get("LATITUDE")
+    LONGITUDE: str = dotenv_config.get("LONGITUDE")
+    TIMEZONE_STR: str = dotenv_config.get("TIMEZONE_STR")
+
+    # 数据备份与还原路径
+    BACKUP_PATH: str = dotenv_config.get("BACKUP_PATH")
+    RESTORE_PATH: str = dotenv_config.get("RESTORE_PATH")
+
+    SYNC_DATAS: str = dotenv_config.get("SYNC_DATAS")
 
 
 settings = Settings()

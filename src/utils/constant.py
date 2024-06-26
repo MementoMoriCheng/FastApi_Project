@@ -1,8 +1,8 @@
 # !/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# 默认最大次数
-MOST_PLY = 100
+# 默认次数
+DEFAULT_PLY = 1
 
 # 默认间隔
 FLIGHT_INTERVAL = 30
@@ -27,6 +27,22 @@ ENABLE = 1  # 角色已启用
 # 飞行数据表名
 FLIGHT_DATA_TABLE = "gnss_data"
 
+# 中间表
+INTERMEDIATE_TABLE = "intermediate_table"
+
+# 飞机信息登记表机号列名
+AIRCRAFT_ID = "j_h__bGYP"
+AIRCRAFT_TYPE = "j_x__CchN"
+
+# 网卡名字
+NETWORK_CARD_NAME = ["virtual", "vmware", "vmnet", "vethernet (wsl)"]
+
+# 导出文件信息
+# 题库信息
+# COLUMNS_TO_KEEP = ['QID', 'department', 'major', 'course', 'chapter', 'section', 'type', 'option_number', 'question', 'evaluate_answers', 'answer', 'used_times', 'scored_times', 'remarks', 'score']
+COLUMNS_TO_KEEP = ['QID', 'department', 'major', 'course', 'chapter', 'section', 'type', 'option_number', 'question',
+                   'evaluate_answers', 'answer']
+
 
 class RecordsStatusCode:
     """数据库记录日志状态码"""
@@ -35,6 +51,35 @@ class RecordsStatusCode:
     INFO = 1
     WARNING = 2
     ERROR = 3
+
+
+class SubjectSchedulingPriority:
+    """课目编排优先级"""
+
+    Highest = 0
+    Middle = 1
+    Lowest = 2
+
+
+class SchedulingCondition:
+    """课目编排影响因素"""
+    # 天气因素
+    good_visibility = 50
+    bad_visibility = 50
+    good_cloud = 50
+    bad_cloud = 50
+    good_wind_speed = 50
+    bad_wind_speed = 50
+    # 飞机状况和数量
+    plane_status = 0  # 状态码
+    plane_number_many = 50
+    plane_number_few = 10
+    # 可用空域数量
+    airspace_number_many = 50
+    airspace_number_few = 10
+    # 教员、学员数量比
+    ratio_coach_and_student_many = 10
+    ratio_coach_and_student_few = 5
 
 
 class QuestionTypeIndex:
@@ -146,4 +191,52 @@ FLIGHT_ALARM = {
     'time': None,
     'update_time': None,
     'is_delete': None
+}
+
+# 制定飞行计划参数字典
+FLIGHT_PLAN_PARAMETER = {
+    "route_ids": "",
+    "plane_ids": "",
+    "coach_ids": "",
+    "student_ids": "",
+    "start_time": "",
+    "end_time": "",
+    "name": "",
+    "flight_duration": "",
+    "flight_interval": "",
+    "status": 1
+}
+
+FLIGHT_PLAN_CONTENT = {
+    'code': None,
+    'description': None,
+    'create_user': None,
+    'update_user': None,
+    'is_delete': None,
+    'create_time': None,
+    'update_time': None,
+    'id': None,
+    'PID': None,
+    'BID': None,
+    'aircraft_type': None,
+    'aircraft_id': None,
+    'longitudinal_position': None,
+    'scheduled_takeoff': None,
+    'initiate_takeoff': None,
+    'engine_start': None,
+    'landing': None,
+    'parking': None,
+    'trainee_subject': None,
+    'practice_combination': None,
+    'launch_interval': None,
+    'preparation_time': None,
+    'number_of_practices': None,
+    'number_of_flyers': None,
+    'crew_combination': None,
+    'current_status': None,
+    'front_cabin_name': None,
+    'front_cabin_code': None,
+    'rear_cabin_name': None,
+    'rear_cabin_code': None,
+    'other_info': None
 }

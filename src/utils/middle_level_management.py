@@ -5,57 +5,56 @@
 # @File    :
 # @Software: PyCharm
 import asyncio
-import datetime
-from datetime import date
-
-from src.config.setting import settings
-from src.utils import generate_uuid, generate_bigint_id
-from src.db.models import CourseSource, CourseChapter, Questions, CourseSchedule, TeachingJournal, Document, \
-    OnlineLearningRecord
-from src.db.schemas.lesson_examination import (
-    QuestionSchema, SearchQuestionSchema, ScheduleSchema, EditScheduleSchema,
-    TeachingJournalSchema, EditTeachingJournalSchema,
-    CourseChapterSchema, SearchCourseChapterSchema, CourseSourceSchema, EditCourseChapterSchema, CourseChapterID,
-    EditQuestionSchema, CourseSourceFile, OnlineLearningRecordSchema, EditOnlineLearningRecordSchema,
-    ShowOnlineLearningRecord
-)
 import copy
-from typing import List
-from src.db.dals import ExecDAL, SortBy
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.exc import SQLAlchemyError
-
-from src.db.models.exam_result import ScoreStatistics
+import datetime
+from datetime import timedelta
+from src.config.setting import settings
+from src.db.models import FlyingService
+from src.utils.responses import resp_200
 from src.utils.sql_config import sql_handle
-from src.utils.dependencies import DALGetter
-from src.utils.logger import logger, generate_mysql_log_data
-from src.utils.constant import PUBLISHED, DELETE, RESERVE, RecordsStatusCode, QUESTION_TYPE_LIST
-from src.utils.responses import resp_200, resp_404, resp_500, resp_400
+from src.utils import generate_uuid, generate_bigint_id
+from src.db.schemas.flying_manage import CreateFlyingPlan
 from src.utils.exam_related_tools import ExamPaperGenerator
-from src.utils.exam_related_tools import CalculateGrade, cal_grade_percentage
-from src.db.models import (
-    Examination, ExamResult, ExamResultDetail, Paper, PaperQuestions, Questions
-)
-from src.db.schemas.lesson_examination import (
-    ExaminationSchema, SearchExaminationSchema, ExamResultSchema, UpdateExamResultSchema,
-    ExamResultDetailSchema, QueryExamResultSchema, SearchPaperSchema, PaperSchema, PaperQuestionSchema,
-    CreatePaperQuestionSchema, EditPaperSchema, QuestionSchema, EditExamResultSchema, EditExamResultDetailSchema,
-    CalQuestion, StudentAnswer, StudentExamResult, StudentIn, EditExaminationSchema, EditScoreStatisticsSchema,
-    ScoreStatisticsSchema
-)
-
-router = APIRouter()
+from src.utils.logger import logger, generate_mysql_log_data
+from src.utils.constant import RESERVE, QUESTION_TYPE_LIST, RecordsStatusCode
+from src.utils.flight_planning_design import gen_schedule, flight_design, check_time
 
 
 # -----------------------------------------------课程/教学资源信息
 async def create_course_source_info(table_name, source_info):
+    """
+    课程资源内容
+    Args:
+        table_name:
+        source_info:
+
+    Returns:
+
+    """
     course_source_dict = await sql_handle.get_table_columns(table_name)
+    course_source_dict.update(RID=generate_bigint_id())
+    # TODO UID用户id
+    course_source_dict.update(UID="")
+    course_source_dict.update(**source_info)
+    return course_source_dict
 
 
 # -----------------------------------------------题库信息管理
 
 async def create_question_info(table_name, question_info):
+    """
+    题库资源内容
+    Args:
+        table_name:
+        question_info:
+
+    Returns:
+
+    """
     question_dict = await sql_handle.get_table_columns(table_name)
+    question_dict.update(QID=generate_bigint_id())
+    question_dict.update(**question_info)
+    return question_dict
 
 
 # -----------------------------------------------在线学习信息
@@ -85,10 +84,6 @@ async def create_online_learning_record_info(table_name, source_info):
     online_learning_dict.update(update_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     return online_learning_dict
-
-
-# source_info = {"course_id": "47981834-c597-4d22-8b5b-0f1ae6b75b58", "keep_time": 50, "user_id": 47981834597}
-# asyncio.run(create_online_learning_record_info("auto_online_learning_record", source_info))
 
 
 # -----------------------------------------------考试管理
@@ -154,6 +149,7 @@ async def get_exam_question_info(code, conditions):
 
         if not e_res:
             return []
+        # random.shuffle(e_res) # 随机打乱
         eid = e_res[0].get("EID")
 
         # 获取试卷信息
@@ -171,9 +167,6 @@ async def get_exam_question_info(code, conditions):
     except ValueError as err:
         logger.error(err)
         return []
-
-
-# asyncio.run(create_exam_info("auto_examination"))
 
 
 # -----------------------------------------------在线考试
@@ -199,9 +192,6 @@ async def create_paper_info(table_name, paper_info):
     except ValueError as err:
         logger.error(err)
         return []
-
-
-# asyncio.run(create_paper_info("auto_paper_info", {}))
 
 
 def distribute_course_ratio(course_info, question_type_counts):
@@ -254,14 +244,13 @@ def distribute_course_ratio(course_info, question_type_counts):
 
 
 # 试题答题和得分等信息
-# async def create_paper_question_info(table_name, create_paper_question, pid, course_info):
 async def create_paper_question_info(table_name, pid, course_info):
     """
     生成试卷
     Args:
         table_name: auto_exam_result_detail
         pid: 试卷 ID
-        create_paper_question: 试卷组成内容及数量，eg:{"fill": 5, "judge": 5, "multiple_choice": 5, "short_answer": 5, "single_choice": 10}
+        course_info: 试卷组成内容及数量，eg:{"fill": 5, "judge": 5, "multiple_choice": 5, "short_answer": 5, "single_choice": 10}
         course_info: 课程信息
 
     Returns:
@@ -295,11 +284,6 @@ async def create_paper_question_info(table_name, pid, course_info):
     return paper_info_list, question_type_counts
 
 
-# question_type = {"fill": 4, "judge": 4, "multiple_choice": 4, "short_answer": 5, "single_choice": 12}
-# exam_paper_info = asyncio.run(create_paper_question_info("auto_exam_result_detail", question_type))
-# print(exam_paper_info)
-
-
 async def get_paper_question_info(table_name, pid):
     """
     获取试卷-题目详细内容
@@ -314,417 +298,448 @@ async def get_paper_question_info(table_name, pid):
     table_info = await sql_handle.select(table_name, conditions=condition)
     if not table_info:
         return
-    qid_list = []
+    qid_list, q_a_list, exam_info = [], [], []
     for info in table_info:
         qid_list.append(info["QID"])
+        q_a_list.append({"QID": info["QID"], "solution": info["solution"]})
         used_time = await sql_handle.select("auto_question_bank", {"QID": info["QID"]}, fields=["used_times"])
         await sql_handle.update("auto_question_bank", {"QID": info["QID"]},
                                 {"used_times": used_time[0]["used_times"] + 1})
     question_condition = {"QID": {"value": qid_list, "operator": "in"}}
     question_info_list = await sql_handle.select("auto_question_bank", conditions=question_condition)
-    return question_info_list
-
-
-# exam_paper_info = asyncio.run(get_paper_question_info("auto_exam_result_detail", 1799812686502956124))
-# print(exam_paper_info)
-
-
-create_fun_dict = {settings.EXAMINATION: create_exam_info, settings.PAPER: create_paper_info,
-                   settings.ONLINE_LEARNING: create_online_learning_record_info}
-get_fun_dict = {settings.EXAMINATION: get_exam_question_info}
+    for question_con in question_info_list:
+        for q_a in q_a_list:
+            if question_con["QID"] == q_a["QID"]:
+                question_con.update(solution=q_a["solution"])
+                exam_info.append(question_con)
+    return exam_info
 
 
 # -----------------------------------------------飞行计划制定
+async def get_flight_plan_content_info(code, conditions):
+    """
+    获取飞行计划内容信息
+    Args:
+        code:
+        conditions:
 
-# -----------------------------------------------考试结果信息
+    Returns:
 
-@router.post("/exam_result/filter_exam_result", tags=["ExamResult"], summary="查询考试结果列表信息")
-async def list_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                           exam_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                           *, exam_info: QueryExamResultSchema):
-    query_params_mapping = exam_info.dict(exclude_none=True)
-    query_params_mapping.update(is_delete=RESERVE)
-    exam_dal.setDb(Examination)
-    exam_res = await exam_dal.get_by_all(**query_params_mapping)
-    if not exam_res:
-        return resp_200(data=[])
-    exam_res_list = []
-    dal.setDb(ExamResult)
-    for exam in exam_res:
-        res = await dal.get_by_all(exam_id=exam.id, order_by_list=[SortBy("total_score", True)])
-        for idx, ms in enumerate(res):
-            ms_data = ExamResultSchema.from_orm(ms)
-            ms_dict = ms_data.dict()
-            ms_dict.update(name=exam.name)
-            ms_dict.update(major=exam.major)
-            ms_dict.update(rank=idx + 1)
-            exam_res_list.append(ms_dict)
-
-    return resp_200(data={"data": exam_res_list})
-
-
-@router.get("/exam_result/{id_}", tags=["ExamResult"], summary="通过id获取考试结果信息")
-async def get_exam_result_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(ExamResult)
-    res = await dal.get_by(id=id_)
-    if not res:
-        return resp_404(msg="没有找到该考试的详情信息！")
-    data = ExamResultSchema.from_orm(res)
-
-    return resp_200(data=data)
-
-
-@router.post("/exam_result", tags=["ExamResult"], summary="创建考试结果信息")
-async def create_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                             *, exam_result: EditExamResultSchema):
-    dal.setDb(ExamResult)
-    student_id = exam_result.student_id
-    if not student_id:
-        return resp_200(msg="考试关联的学生为空！")
-    else:
-        res = await dal.create(exam_result)
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="exam_info",
-                                             handle_user="", handle_params=exam_result.dict(),
-                                             entity_id="", handle_reason="创建考试结果信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res.id)
-
-
-@router.delete("/exam_result/{id_}", tags=["ExamResult"], summary="删除考试结果信息")
-async def delete_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(ExamResult)
-    ms = await dal.get(id_)
-    if not ms:
-        return resp_404(msg="考试不存在，删除失败！")
-    if ms.start_time is not None:
-        return resp_400(msg="该学生已经参加考试，无法删除！")
-    else:
-        res = await dal.delete(id_)
-        if not res:
-            return resp_500()
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="exam_info",
-                                             handle_user="", handle_params=id_,
-                                             entity_id=id_, handle_reason="删除考试结果信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-    return resp_200(data={"id": id_})
-
-
-@router.patch("/exam_result/{id_}", tags=["ExamResult"], summary="编辑考试结果信息")
-async def update_exam_result(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, obj_in: UpdateExamResultSchema):
-    dal.setDb(ExamResult)
-    ms = await dal.get(id_)
-    if not ms:
-        return resp_404(msg="编辑失败！考试结果不存在，无法进行编辑！")
-    res = await dal.update(id_, obj_in)
-    if not res:
-        return resp_500()
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="exam_info",
-                                             handle_user="", handle_params=obj_in.dict(),
-                                             entity_id=id_, handle_reason="编辑考试结果信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res, msg="编辑成功")
-
-
-# -----------------------------------------------课程表资源信息
-@router.get("/course_schedule/filter_course_schedule", tags=["CourseSchedule"], summary="查询课程表信息")
-async def list_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                                    limit: int = Query(default=30), offset: int = Query(default=0),
-                                    course_name: str = Query(None), classroom: str = Query(None),
-                                    teacher: str = Query(None), classes: str = Query(None), status: int = Query(None),
-                                    course_date: date = Query(None)):
-    dal.setDb(CourseSchedule)
-    variables = {"limit": limit, "offset": offset,
-                 "course_name": course_name,
-                 "course_date": course_date,
-                 "classroom": classroom,
-                 "teacher": teacher,
-                 "classes": classes,
-                 "status": status,
-                 "is_delete": RESERVE
-                 }
-    query_params_mapping = {k: v for k, v in filter(lambda item: item[1] is not None, variables.items())}
-    if course_name is not None:
-        query_params_mapping["course_name__contains"] = query_params_mapping.pop("course_name")
-    res = await dal.get_by_all(**query_params_mapping)
-    if not res:
-        return resp_200(data=[])
-    data = [ScheduleSchema.from_orm(ms) for ms in res]
-    return resp_200(data={"data": data, "total": len(res)})
-
-
-@router.get("/course_schedule/{id_}", tags=["CourseSchedule"], summary="通过id获取课程表信息")
-async def get_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(CourseSchedule)
-    res = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not res:
-        return resp_404(msg="试题不存在！")
-    data = ScheduleSchema.from_orm(res)
-    return resp_200(data=data)
-
-
-@router.post("/course_schedule", tags=["CourseSchedule"], summary="创建课程表信息")
-async def create_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, schedule_info: EditScheduleSchema):
-    dal.setDb(CourseSchedule)
-    res = await dal.create(schedule_info)
-    if not res:
-        return resp_400(msg="创建失败！")
-    schedule_data = schedule_info.dict()
-    if schedule_info.course_date:
-        schedule_data.update({"course_date": schedule_info.course_date.strftime("%Y-%m-%d")})
-    if schedule_info.course_start:
-        schedule_data.update({"course_start": schedule_info.course_start.strftime("%Y-%m-%d %H:%M:%S")})
-    if schedule_info.course_end:
-        schedule_data.update({"course_end": schedule_info.course_end.strftime("%Y-%m-%d %H:%M:%S")})
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="course_schedule",
-                                             handle_user="", handle_params=schedule_data,
-                                             entity_id=res.id, handle_reason="创建课程表信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res.id)
-
-
-@router.delete("/course_schedule/{id_}", tags=["CourseSchedule"], summary="删除课程表信息")
-async def delete_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(CourseSchedule)
-    ms = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not ms:
-        return resp_404(msg="课程表不存在，删除失败！")
-    res = await dal.update(id_, {"is_delete": DELETE})
-    if not res:
-        return resp_500()
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="course_schedule",
-                                             handle_user="", handle_params=id_,
-                                             entity_id=id_, handle_reason="删除课程表信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data={"id": id_})
-
-
-@router.patch("/course_schedule/{id_}", tags=["CourseSchedule"], summary="编辑课程表信息")
-async def update_course_schedule_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str,
-                                      schedule_info: EditScheduleSchema):
-    dal.setDb(CourseSchedule)
-    ms = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not ms:
-        return resp_404(msg="编辑失败！课程表不存在，无法进行编辑！")
-    res = await dal.update(id_, schedule_info)
-    if not res:
-        return resp_500()
-    schedule_data = schedule_info.dict()
-
-    if schedule_info.course_date:
-        schedule_data.update({"course_date": schedule_info.course_date.strftime("%Y-%m-%d")})
-    if schedule_info.course_start:
-        schedule_data.update({"course_start": schedule_info.course_start.strftime("%Y-%m-%d %H:%M:%S")})
-    if schedule_info.course_end:
-        schedule_data.update({"course_end": schedule_info.course_end.strftime("%Y-%m-%d %H:%M:%S")})
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="course_schedule",
-                                             handle_user="", handle_params=schedule_data,
-                                             entity_id=id_, handle_reason="编辑课程表信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res, msg="编辑成功")
-
-
-# -----------------------------------------------教学日志信息
-@router.get("/teaching_journal/filter_teaching_journal", tags=["TeachingJournal"], summary="查询教学日志信息")
-async def list_teaching_journal_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                                     limit: int = Query(default=30), offset: int = Query(default=0),
-                                     course_name: str = Query(None), classroom: str = Query(None),
-                                     teacher: str = Query(None), course_content: str = Query(None),
-                                     status: int = Query(None), course_date: date = Query(None)):
-    dal.setDb(TeachingJournal)
-    variables = {"limit": limit, "offset": offset,
-                 "course_name": course_name,
-                 "course_date": course_date,
-                 "classroom": classroom,
-                 "teacher": teacher,
-                 "course_content": course_content,
-                 "status": status,
-                 "is_delete": RESERVE
-                 }
-    query_params_mapping = {k: v for k, v in filter(lambda item: item[1] is not None, variables.items())}
-    if course_name is not None:
-        query_params_mapping["course_name__contains"] = query_params_mapping.pop("course_name")
-    if course_content is not None:
-        query_params_mapping["course_content__contains"] = query_params_mapping.pop("course_content")
-    res = await dal.get_by_all(**query_params_mapping)
-    if not res:
-        return resp_200(data=[])
-    data = [TeachingJournalSchema.from_orm(ms) for ms in res]
-    return resp_200(data={"data": data, "total": len(res)})
-
-
-@router.get("/teaching_journal/{id_}", tags=["TeachingJournal"], summary="通过id获取教学日志信息")
-async def get_teaching_journal_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(TeachingJournal)
-    res = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not res:
-        return resp_404(msg="教学日志信息不存在！")
-    data = TeachingJournalSchema.from_orm(res)
-    return resp_200(data=data)
-
-
-@router.post("/teaching_journal", tags=["TeachingJournal"], summary="创建教学日志信息")
-async def create_teaching_journal_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
-                                       teaching_journal_info: EditTeachingJournalSchema):
-    dal.setDb(TeachingJournal)
-    res = await dal.create(teaching_journal_info)
-    if not res:
-        return resp_400(msg="创建失败！")
-
-    teaching_journal_data = teaching_journal_info.dict()
-    if teaching_journal_info.course_date:
-        teaching_journal_data.update({"course_date": teaching_journal_info.course_date.strftime("%Y-%m-%d")})
-    if teaching_journal_info.course_start:
-        teaching_journal_data.update(
-            {"course_start": teaching_journal_info.course_start.strftime("%Y-%m-%d %H:%M:%SZ")})
-    if teaching_journal_info.course_end:
-        teaching_journal_data.update({"course_end": teaching_journal_info.course_end.strftime("%Y-%m-%d %H:%M:%SZ")})
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="teaching_journal",
-                                             handle_user="", handle_params=teaching_journal_data,
-                                             entity_id=res.id, handle_reason="创建教学日志信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res.id)
-
-
-@router.delete("/teaching_journal/{id_}", tags=["TeachingJournal"], summary="删除教学日志信息")
-async def delete_teaching_journal_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(TeachingJournal)
-    ms = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not ms:
-        return resp_404(msg="教学日志信息不存在，删除失败！")
-    res = await dal.update(id_, {"is_delete": DELETE})
-    if not res:
-        return resp_500()
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="teaching_journal",
-                                             handle_user="", handle_params=id_,
-                                             entity_id=id_, handle_reason="删除教学日志信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data={"id": id_})
-
-
-@router.patch("/teaching_journal/{id_}", tags=["TeachingJournal"], summary="编辑教学日志信息")
-async def update_teaching_journal_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str,
-                                       teaching_journal_info: EditTeachingJournalSchema):
-    dal.setDb(TeachingJournal)
-    ms = await dal.get_by(id=id_, is_delete=RESERVE)
-    if not ms:
-        return resp_404(msg="编辑失败！教学日志信息不存在，无法进行编辑！")
-    res = await dal.update(id_, teaching_journal_info)
-    if not res:
-        return resp_500()
-
-    teaching_journal_data = teaching_journal_info.dict()
-    if teaching_journal_info.course_date:
-        teaching_journal_data.update({"course_date": teaching_journal_info.course_date.strftime("%Y-%m-%d")})
-    if teaching_journal_info.course_start:
-        teaching_journal_data.update(
-            {"course_start": teaching_journal_info.course_start.strftime("%Y-%m-%d %H:%M:%SZ")})
-    if teaching_journal_info.course_end:
-        teaching_journal_data.update({"course_end": teaching_journal_info.course_end.strftime("%Y-%m-%d %H:%M:%SZ")})
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="teaching_journal",
-                                             handle_user="", handle_params=teaching_journal_data,
-                                             entity_id=id_, handle_reason="编辑教学日志信息")
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=res, msg="编辑成功")
-
-
-# -----------------------------------------------考试结果详情
-
-@router.get("/exam_info_detail/{id_}", tags=["ExamResultDetail"], summary="通过考试结果ID获取详情信息")
-async def get_exam_info_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
-    dal.setDb(ExamResultDetail)
-    res = await dal.get_by_all(exam_result_id=id_)
-    if not res:
-        return resp_200(data=[])
-
-    data = [ExamResultDetailSchema.from_orm(ms) for ms in res]
-
-    return resp_200(data=data)
-
-
-@router.post("/exam_info_detail", tags=["ExamResultDetail"], summary="创建考试结果详情信息")
-async def create_exam_info_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
-                                  result_detail: List[EditExamResultDetailSchema]):
-    dal.setDb(ExamResultDetail)
+    """
     try:
-        await dal.create_all(result_detail)
-    except SQLAlchemyError:
-        return resp_400()
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type="exam_result_detail",
-                                             handle_user="", handle_params=[result.dict() for result in result_detail],
-                                             entity_id="", handle_reason="创建考试结果详情信息")
+        table_name = f"auto_{code}"
+        # 获取auto_flight_plan_content信息
+        plan_parameter = await sql_handle.select(table_name, conditions)
+        if not conditions:
+            return plan_parameter
+        if not plan_parameter:
+            return []
+        pid = plan_parameter[0].get("PID")
+        # 获取auto_flight_plan_base信息
+        plan_base_condition = {"PID": pid}
+        plan_base_res = await sql_handle.select("auto_flight_plan_base", plan_base_condition)
+        if not plan_base_res:
+            return []
+        return {"base": plan_base_res, "content": plan_parameter}
+
+    except ValueError as err:
+        logger.error(err)
+        return []
+
+
+async def create_single_flying_service(dal, input_data):
+    """
+    创建一条飞行计划
+    Args:
+        dal:
+        input_data: {"id":auto_flight_plan_base.id}
+
+    Returns:
+
+    """
+
+    # 收集信息
+    plan_parameter, plan_content = await flight_design.plan_parameter_setting_collect(input_data)
+    if not plan_parameter:
+        return []
+    # logger.info(f"创建一条飞行计划:{plan_parameter}")
+    try:
+        plane_id = plan_parameter.get("plane_ids")[0]
+        coach_id = plan_parameter.get("coach_ids")[0]
+        student_id = plan_parameter.get("student_ids")[0]
+        route_id = plan_parameter.get("route_ids")[0]
+    except IndexError as err:
+        logger.error(err)
+        return []
+    start_date = plan_parameter.get("start_time")
+
+    create_plan = CreateFlyingPlan
+    create_plan.name = plan_parameter.get("name")
+    create_plan.description = plan_parameter.get("description")
+    create_plan.start_time = plan_parameter.get("start_time")
+    create_plan.end_time = plan_parameter.get("end_time")
+
+    dal.setDb(FlyingService)
+    plane_exist_plan = await dal.get_by_all(plane_id=plane_id, is_delete=RESERVE, plan_time_start__gte=start_date)
+    conflict_flag = check_time(plane_exist_plan, create_plan.start_time, create_plan.end_time)
+    if conflict_flag:
+        return resp_200(data=[], msg="飞机安排存在冲突")
+    plane_latest_time = max([plan.real_time_end for plan in plane_exist_plan]) if plane_exist_plan else start_date
+
+    coach_exist_plan = await dal.get_by_all(coach_id=coach_id, is_delete=RESERVE, plan_time_start__gte=start_date)
+    conflict_flag = check_time(coach_exist_plan, create_plan.start_time, create_plan.end_time)
+    if conflict_flag:
+        return resp_200(data=[], msg="教练安排存在冲突")
+    coach_latest_time = max([coach.real_time_end for coach in coach_exist_plan]) if coach_exist_plan else start_date
+
+    student_exist_plan = await dal.get_by_all(student_id=student_id, is_delete=RESERVE, plan_time_start__gte=start_date)
+    conflict_flag = check_time(student_exist_plan, create_plan.start_time, create_plan.end_time)
+    if conflict_flag:
+        return resp_200(data=[], msg="学生安排存在冲突")
+    student_latest_time = max(
+        [student.real_time_end for student in student_exist_plan]) if student_exist_plan else start_date
+
+    route_exist_plan = await dal.get_by_all(route_id=route_id, is_delete=RESERVE, plan_time_start__gte=start_date)
+    conflict_flag = check_time(route_exist_plan, create_plan.start_time, create_plan.end_time)
+    if conflict_flag:
+        return resp_200(data=[], msg="航线安排存在冲突")
+    route_latest_time = max([route.real_time_end for route in route_exist_plan]) if route_exist_plan else start_date
+
+    latest_time = max(plane_latest_time, coach_latest_time, student_latest_time, route_latest_time)
+
+    available_plane = await dal.get_by_all(plane_id=plane_id, is_delete=RESERVE)
+    available_coach = await dal.get_by_all(coach_id=coach_id, is_delete=RESERVE)
+    available_fly_route = await dal.get_by_all(route_id=route_id, is_delete=RESERVE)
+    available_student = await dal.get_by_all(student_id=student_id, is_delete=RESERVE)
+
+    # 飞行计划时长
+    # if flight_duration:
+    #     obj_in["plan_duration"] = flight_duration
+    # else:
+    #     name = input_data.fly_route.get('table')
+    #     table_name = f"auto_{name}"
+    #     select_conditions = {"id": route_id}
+    #     flight_duration = await sql_handle.select(table_name, conditions=select_conditions, fields=["flight_duration"])
+    #     if not flight_duration:
+    #         return resp_404(msg=f"未能获取到航线:{route_id}信息")
+    #     obj_in["plan_duration"] = flight_duration[0]["flight_duration"]
+
+    # flight_interval = plan_parameter.get("flight_interval")
+    # select_conditions = {"id": plane_id}
+    # flight_interval = await sql_handle.select(table_name, conditions=select_conditions, fields=["flight_interval"])
+    # if not flight_interval:
+    #     return resp_404(msg=f"未能获取到飞机:{plane_id}信息")
+    # plan_parameter["flight_interval"] = flight_interval[0]["flight_interval"]
+    # TODO 两架飞机间的放飞间隔时间放飞间隔
+    flight_interval = 15
+
+    plan_parameter["flight_interval"] = flight_interval
+    break_time_length = timedelta(minutes=flight_interval)
+    if latest_time and (latest_time + break_time_length) >= start_date:
+        plan_parameter["start_time"] = (latest_time + break_time_length).strftime("%Y-%m-%d %H:%M:%S")
+    plan_parameter["end_time"] = (plan_parameter.get("end_time")).strftime("%Y-%m-%d %H:%M:%S")
+    expand_data = copy.deepcopy(plan_parameter)
+    plan_info = gen_schedule(plan_parameter, expand_data, available_plane, available_coach, available_fly_route,
+                             available_student)
+
+    await dal.create_all(plan_info)
+    # 写入数据表auto_flight_plan_content
+    plan_content["launch_interval"] = 15
+    course_source_dict = await create_flight_plan_info(plan_info[0], plan_content)
+
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
+                                             handle_user="", handle_params=plan_parameter,
+                                             entity_id="",
+                                             handle_reason=create_plan.description if create_plan.description else '创建一条飞行计划')
     await sql_handle.add_records("log_manage", mysql_log_data)
 
-    return resp_200()
+    return course_source_dict
 
 
-# -----------------------------------------------考试成绩统计
-@router.get("/score_statistics/filter_score_statistics", tags=["ScoreStatistics"], summary="查询考试成绩统计信息")
-async def list_score_statistics_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                                     limit: int = Query(default=30), offset: int = Query(default=0),
-                                     name: str = Query(None), major: str = Query(None)):
-    dal.setDb(ScoreStatistics)
-    variables = {"limit": limit, "offset": offset,
-                 "name": name,
-                 "major": major,
-                 "is_delete": RESERVE}
-    query_params_mapping = {k: v for k, v in filter(lambda item: item[1] is not None, variables.items())}
-    if name is not None:
-        query_params_mapping["name__contains"] = query_params_mapping.pop("name")
-    if major is not None:
-        query_params_mapping["major__contains"] = query_params_mapping.pop("major")
-    res = await dal.get_by_all(**query_params_mapping)
-    if not res:
-        return resp_200(data=[])
-    data = [ScoreStatisticsSchema.from_orm(ms) for ms in res]
-    return resp_200(data={"data": data, "total": len(res)})
+async def create_batch_flying_service(dal, input_data):
+    """
+    批量创建飞行计划
+    Args:
+        dal:
+        input_data: {"id":auto_flight_plan_base.id}
 
+    Returns:
 
-@router.post("/score_statistics", tags=["ScoreStatistics"], summary="创建考试成绩统计信息")
-async def create_score_statistics_detail(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                                         exam_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                                         exam_result_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
-                                         *, name: str):
-    dal.setDb(ScoreStatistics)
-    exam_dal.setDb(Examination)
-    exam_result_dal.setDb(ExamResult)
-    score_statistics_list, score_statistics = [], {}
-    exam_res = await exam_dal.get_by_all(name=name)
-    for exam_info in exam_res:
-        score_statistics.update(name=name)
-        score_statistics.update(major=exam_info.major)
-        exam_result_res = await exam_result_dal.get_by_all(exam_id=exam_info.id,
-                                                           order_by_list=[SortBy("total_score", True)])
-        score_statistics.update(student_num=len(exam_result_res))
-        score_statistics.update(highest_score=exam_result_res[0].total_score)
-        score_statistics.update(lowest_score=exam_result_res[-1].total_score)
-        score_statistics.update(average_score=
-                                round(sum([con.total_score for con in exam_result_res]) / len(exam_result_res), 2))
-        ideal_percentage, good_percentage, pass_percentage, flunk_percentage = cal_grade_percentage(exam_result_res)
-        score_statistics.update(ideal_percentage=ideal_percentage)
-        score_statistics.update(good_percentage=good_percentage)
-        score_statistics.update(pass_percentage=pass_percentage)
-        score_statistics.update(flunk_percentage=flunk_percentage)
-        score_statistics_list.append(copy.copy(score_statistics))
+    """
+    # 收集信息
+    plan_parameter, plan_content = await flight_design.plan_parameter_setting_collect(input_data)
+    if not plan_parameter:
+        return []
+
+    plane_id = plan_parameter.get("plane_ids")
+    coach_id = plan_parameter.get("coach_ids")
+    student_id = plan_parameter.get("student_ids")
+    route_id = plan_parameter.get("route_ids")
+
+    dal.setDb(FlyingService)
+    # logger.info(f"根据信息自动创建飞行计划:{input_data.dict()}")
+    # plane_id = input_data.plane.get("id")
+    # coach_id = input_data.coach.get("id")
+    # student_id = input_data.student.get("id")
+    # route_id = input_data.fly_route.get("id")
+
+    plan_info_list = []
+    route_time_dict = dict()
+    # obj_in = input_data.dict()
+    # expand_data = copy.deepcopy(obj_in)
+
+    # TODO 飞行计划时长
+    duration_list = []
+    # flight_duration = obj_in.get("flight_duration")
+    # if flight_duration:
+    #     obj_in["plan_duration"] = flight_duration
+    #     duration_list.extend([flight_duration for _ in range(len(route_id))])
+    # else:
+    #     name = input_data.fly_route.get('table')
+    #     table_name = f"auto_{name}"
+    #     for id in route_id:
+    #         select_conditions = {"id": id}
+    #         flight_duration = await sql_handle.select(table_name, conditions=select_conditions,
+    #                                                   fields=["flight_duration"])
+    #         if not flight_duration:
+    #             return resp_404(msg=f"未能获取到航线:{id}信息")
+    #         duration_list.append(flight_duration[0]["flight_duration"])
+    # TODO 两架飞机间的放飞间隔时间放飞间隔
+    interval_list = []
+    # flight_interval = obj_in.get("flight_interval")
+    # if flight_interval:
+    #     interval_list.extend([flight_interval for _ in range(len(route_id))])
+    # else:
+    #     name = input_data.plane.get('table')
+    #     table_name = f"auto_{name}"
+    #     select_conditions = {"id": plane_id[0]}
+    #     flight_interval = await sql_handle.select(table_name, conditions=select_conditions,
+    #                                               fields=["flight_interval"])
+    #     if not flight_interval:
+    #         return resp_404(msg=f"未能获取到飞机:{plane_id[0]}信息")
+    #     interval_list.extend([flight_interval[0]["flight_interval"] for _ in range(len(route_id))])
+
+    start_date = plan_parameter.get("start_time")
+    end_date = plan_parameter.get("end_time")
+
+    create_plan = CreateFlyingPlan
+    create_plan.name = plan_parameter.get("name")
+    create_plan.description = plan_parameter.get("description")
+    create_plan.start_time = plan_parameter.get("start_time")
+    create_plan.end_time = plan_parameter.get("end_time")
+
+    # 查询当天存在的航线安排
+    for id in route_id:
+        date_times = []
+        route_exist_plan = await dal.get_by_all(route_id=id, is_delete=RESERVE, plan_time_start__gte=start_date)
+        date_times.extend([plan.real_time_end for plan in route_exist_plan])
+        if date_times:
+            max_date_time = max(date_times)
+            if max_date_time + timedelta(minutes=duration_list[0]) <= end_date:
+                route_time_dict[id] = max_date_time
+            else:
+                continue
+        else:
+            route_time_dict[id] = start_date
+
+    # 查询到当天存在的安排
+    latest_plan_list = []
+    for plane in plane_id:
+        plane_exist_plan = await dal.get_by_all(route_id=plane, is_delete=RESERVE, plan_time_start__gte=start_date)
+        latest_plan_list.extend(plane_exist_plan)
+
+    def allocate_available_source():
+        """
+        分派资源
+        Returns:
+
+        """
+        from operator import itemgetter
+        copies = []
+        # 升序排列
+        sorted_tuples = sorted(route_time_dict.items(), key=itemgetter(1), reverse=True)
+        sorted_route_lst = [t[0] for t in sorted_tuples]
+        n = len(sorted_route_lst)
+        plane_distributions = distribute_elements(plane_id, n)
+        sorted_plane_lst = sorted(plane_distributions, key=len)
+        coach_distributions = distribute_elements(coach_id, n)
+        sorted_coach_lst = sorted(coach_distributions, key=len)
+        student_distributions = distribute_elements(student_id, n)
+        sorted_student_lst = sorted(student_distributions, key=len)
+        for i in range(n):
+            copied_dict = copy.deepcopy(obj_in)
+            copied_dict["fly_route"]["id"] = sorted_route_lst[i]
+            copied_dict["plan_duration"] = duration_list[i]
+            copied_dict["flight_interval"] = interval_list[i]
+            copied_dict["plane"]["id"] = sorted_plane_lst[i]
+            copied_dict["coach"]["id"] = sorted_coach_lst[i]
+            copied_dict["student"]["id"] = sorted_student_lst[i]
+            if route_time_dict[sorted_route_lst[i]] != start_date:
+                break_time_length = timedelta(minutes=flight_interval)
+                copied_dict["start_time"] = (route_time_dict[sorted_route_lst[i]] + break_time_length).strftime(
+                    "%Y-%m-%d %H:%M:%S")
+            copies.append(copied_dict)
+        return copies
+
+    def distribute_elements(elements, groups):
+        """
+        分派二级资源
+        Args:
+            elements:
+            groups:
+
+        Returns:
+
+        """
+        n = len(elements)
+        even_distribution = n // groups
+        remainder = n % groups
+        distributions = [[] for _ in range(groups)]
+        for i in range(groups):
+            distributions[i].extend(elements[i * even_distribution:(i + 1) * even_distribution])  # 这里用数字i+1代替实际元素，以示区分
+        for i in range(remainder):
+            distributions[i].append(elements[groups * even_distribution + remainder - 1 - i])
+        return distributions
+
+    def find_unique_elements(list1):
+        unique_elements = []
+        cartesian = list(itertools.product(student_id, coach_id, plane_id))
+        for element2 in cartesian:
+            is_unique = True
+            for element1 in list(set(list1)):
+                if element2[0] == element1[0] or element2[1] == element1[1] or element2[2] == element1[2]:
+                    is_unique = False
+                    break
+            if is_unique:
+                unique_elements.append(element2)
+        return unique_elements
+
+    def check_plan(plan_info_list):
+        checked_conflict_plan, all_plan, planed_list = [], [], []
+        for plan_info in plan_info_list:
+            plan_time_start, plan_time_end = plan_info["plan_time_start"], plan_info["plan_time_end"]
+
+            for latest_plan in latest_plan_list:
+                if check_time([latest_plan], plan_time_start, plan_time_end):
+                    all_plan.append(
+                        (int(latest_plan.student_id), int(latest_plan.coach_id), int(latest_plan.plane_id)))
+                    if (latest_plan.student_id == str(plan_info["student_id"])
+                            or latest_plan.coach_id == str(plan_info["coach_id"])
+                            or latest_plan.plane_id == str(plan_info["plane_id"])):
+                        checked_conflict_plan.append(
+                            (plan_info["student_id"], plan_info["coach_id"], plan_info["plane_id"]))
+
+                    plan_obj = PlanObject(plan_info)
+                    planed_list.append(plan_obj)
+
+        return list(set(checked_conflict_plan)), list(set(all_plan)), planed_list
+
+    def conflict_resolution(plan_info_list, checked_info, unique_elements):
+        for idx, check_info in enumerate(checked_info):
+            for plan_info in plan_info_list:
+                try:
+                    if check_info[0] == plan_info["student_id"] and check_info[1] == plan_info["coach_id"] and \
+                            check_info[
+                                2] == plan_info["plane_id"]:
+                        plan_info["student_id"] = unique_elements[idx][0]
+                        plan_info["coach_id"] = unique_elements[idx][1]
+                        plan_info["plane_id"] = unique_elements[idx][2]
+                        checked_info_list.append(unique_elements[idx])
+                except IndexError:
+                    continue
+
+    class PlanObject:
+        def __init__(self, data_dict):
+            for key, value in data_dict.items():
+                setattr(self, key, value)
 
     try:
-        await dal.create_all(score_statistics_list)
-    except SQLAlchemyError:
-        return resp_400()
+        allocate_datas = allocate_available_source()
+    except Exception as e:
+        logger.warning(e)
+        return resp_200(data=[])
+    for allocate_data in allocate_datas:
+        plan_info = gen_schedule(allocate_data, expand_data, [], [], [], [], auto_gen=True)
+        plan_info_list.extend(plan_info)
+    dal.setDb(FlyingService)
+    end_list = []
+    for con in plan_info_list:
+        checked_info_list = []
+        checked_info, all_info, planed = check_plan([con])
+        latest_plan_list.extend(planed)
+        checked_info_list.extend(checked_info)
+        all_info.extend(checked_info_list)
+        unique_elements = find_unique_elements(all_info)
+        if not unique_elements and not checked_info:
+            end_list.append(con)
+            continue
+        if not unique_elements and checked_info:
+            continue
+        random.shuffle(unique_elements)
+        conflict_resolution([con], checked_info, unique_elements)
+        end_list.append(con)
+    await dal.create_all(end_list)
 
-    return resp_200()
+    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
+                                             handle_user=input_data.handle_user, handle_params=input_data.dict(),
+                                             entity_id="",
+                                             handle_reason=input_data.description if input_data.description else '根据信息自动创建飞行计划')
+    await sql_handle.add_records("log_manage", mysql_log_data)
+
+    return resp_200(data=end_list, msg="飞行计划已自动创建")
+
+
+async def create_flight_plan_info(plan_info, plan_content):
+    """
+    生成计划数据
+    Args:
+        plan_info:
+        plan_content: 写入表auto_flight_plan_content的内容
+
+    Returns:
+        flight_plan_dict
+    """
+    flight_plan_dict = await sql_handle.get_table_columns(settings.FLIGHT_PLAN_CONTENT)
+    flight_plan_dict.update(id=generate_uuid())
+    flight_plan_dict.update(PID=plan_content.get("PID"))
+    flight_plan_dict.update(BID=generate_bigint_id())
+    flight_plan_dict.update(is_delete=RESERVE)
+    flight_plan_dict.update(create_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    flight_plan_dict.update(update_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    flight_plan_dict.update(aircraft_id=plan_content.get("aircraft_id"))
+    flight_plan_dict.update(aircraft_type=plan_content.get("aircraft_type"))
+    flight_plan_dict.update(longitudinal_position=1)
+    flight_plan_dict.update(scheduled_takeoff=plan_info.get("plan_time_start"))
+    # flight_plan_dict.update(initiate_takeoff=)
+    # flight_plan_dict.update(engine_start=)
+    # flight_plan_dict.update(landing=)
+    flight_plan_dict.update(parking=plan_info.get("plan_time_end"))
+    flight_plan_dict.update(trainee_subject=True)
+    flight_plan_dict.update(practice_combination="101x6")
+    flight_plan_dict.update(launch_interval=plan_content.get("launch_interval"))
+    flight_plan_dict.update(preparation_time=30)
+    flight_plan_dict.update(number_of_practices=1)
+    flight_plan_dict.update(number_of_flyers=1)
+    flight_plan_dict.update(crew_combination="701+901")
+    flight_plan_dict.update(current_status=plan_content.get("current_status"))
+    flight_plan_dict.update(front_cabin_name="法外狂徒张三")
+    flight_plan_dict.update(front_cabin_code="006")
+    flight_plan_dict.update(rear_cabin_name="见血封喉李四")
+    flight_plan_dict.update(rear_cabin_code="009")
+    return flight_plan_dict
+
+
+create_fun_dict = {settings.EXAMINATION: create_exam_info, settings.PAPER: create_paper_info,
+                   settings.ONLINE_LEARNING: create_online_learning_record_info,
+                   settings.TEACHING_RESOURCE: create_course_source_info, settings.QUESTION_BANK: create_question_info}
+get_fun_dict = {settings.EXAMINATION: get_exam_question_info,
+                settings.FLIGHT_PLAN_CONTENT: get_flight_plan_content_info}
+
+if __name__ == '__main__':
+    print(asyncio.run(sql_handle.get_table_columns("auto_question_bank")))
+#     asyncio.run(create_flight_plan_info())
+# question_type = {"fill": 4, "judge": 4, "multiple_choice": 4, "short_answer": 5, "single_choice": 12}
+# exam_paper_info = asyncio.run(create_paper_question_info("auto_exam_result_detail", question_type))
+# print(exam_paper_info)
+# source_info = {"course_id": "47981834-c597-4d22-8b5b-0f1ae6b75b58", "keep_time": 50, "user_id": 47981834597}
+# asyncio.run(create_online_learning_record_info("auto_online_learning_record", source_info))

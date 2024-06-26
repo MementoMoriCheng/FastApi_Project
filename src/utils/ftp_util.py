@@ -1,5 +1,6 @@
 # !/usr/bin/python
 # -*- coding: utf-8 -*-
+import datetime
 import os
 import shutil
 import traceback
@@ -111,10 +112,14 @@ class RemoteFTPService:
         else:
             return FileResponse(local_file_path)
 
-    async def download_ftp_backup_file(self, filename, remote_filename, download=False):
+    async def download_ftp_backup_file(self, filename, remote_filename, download=False, user_path=None):
         self.ftp.set_pasv(True)
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        local_file_path = os.path.join(base_dir, "tmp", filename)
+        if not os.path.exists(settings.RESTORE_PATH):
+            os.makedirs(settings.RESTORE_PATH)
+        if user_path is None:
+            local_file_path = os.path.join(settings.RESTORE_PATH, filename)
+        else:
+            local_file_path = os.path.join(user_path, filename)
         with open(local_file_path, 'wb') as f:
             self.ftp.retrbinary(f'RETR {remote_filename}', f.write)
         self.ftp.quit()
@@ -129,8 +134,7 @@ class RemoteFTPService:
     async def delete_all_record(self):
         try:
             self.ftp.set_pasv(True)
-            for c_path in [settings.FTP_REMOTE_PATH, settings.FTP_REMOTE_CLASSIFICATION_PATH,
-                           settings.FTP_REMOTE_THUMBNAIL_PATH]:
+            for c_path in [settings.FTP_REMOTE_PATH]:
                 self.ftp.cwd(c_path)
                 file_list = []
                 self.ftp.retrlines("LIST", file_list.append)
@@ -249,17 +253,22 @@ class RemoteFTPService:
                     self.ftp.mkd("unprofile")
         return True
 
-    async def ftp_upload_dirs(self, dir_path, desc_path):
+    async def ftp_upload_dirs(self, dir_path, in_path=""):
         try:
             self.ftp.set_pasv(True)
-            remote_desc = settings.FTP_REMOTE_BASE + desc_path + "/"
+
+            if in_path:
+                remote_desc = settings.FTP_REMOTE_PATH + in_path + "/"
+            else:
+                remote_desc = settings.FTP_REMOTE_PATH
+            print(remote_desc)
             files = os.listdir(dir_path)
             for item in files:
                 loacl_path = os.path.join(dir_path, item)
+                self.ftp.cwd(remote_desc)
                 if os.path.isdir(loacl_path):
-                    self.ftp.cwd(remote_desc)
                     self.ftp.mkd(item)
-                    await self.ftp_upload_dirs(loacl_path, desc_path + "/" + item)
+                    await self.ftp_upload_dirs(loacl_path, item)
                 elif os.path.isfile(loacl_path):
                     f = open(loacl_path, "rb")
                     await self.upload_encrypted_data_to_ftp(f, remote_desc + "/" + item)
@@ -267,54 +276,53 @@ class RemoteFTPService:
         except:
             logger.error(traceback.print_exc())
 
-    async def ftp_copy_dir(self, dir_name):
+    async def ftp_copy_dir(self, ftp_path, local_path, upload_ftp=True, delete_source=True):
         try:
             self.ftp.set_pasv(True)
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            local_file_path = os.path.join(base_dir, "tmp", dir_name)
-            for c_path in [settings.FTP_REMOTE_PATH, settings.FTP_REMOTE_CLASSIFICATION_PATH,
-                           settings.FTP_REMOTE_THUMBNAIL_PATH]:
 
-                def loop_dir(c_dir, local_dir):
-                    if os.path.exists(local_dir) and not os.path.isdir(local_dir):
-                        os.remove(local_dir)
-                    if not os.path.exists(local_dir):
-                        os.makedirs(local_dir)
+            def loop_dir(c_dir, local_dir):
+                if os.path.exists(local_dir) and not os.path.isdir(local_dir):
+                    os.remove(local_dir)
+                if not os.path.exists(local_dir):
+                    os.makedirs(local_dir)
 
-                    self.ftp.cwd(c_dir)
-                    file_list = []
-                    self.ftp.retrlines("LIST", file_list.append)
+                self.ftp.cwd(c_dir)
+                file_list = []
+                self.ftp.retrlines("LIST", file_list.append)
 
-                    for filename in file_list:
-                        filename_arr = filename.split()
-                        file_name = filename_arr[len(filename_arr) - 1]
-                        if file_name not in [".", ".."]:
-                            local_filename = os.path.join(local_dir, file_name)
+                for filename in file_list:
+                    filename_arr = filename.split()
+                    file_name = filename_arr[len(filename_arr) - 1]
+                    if file_name not in [".", ".."]:
+                        local_filename = os.path.join(local_dir, file_name)
 
-                            next_dir = c_dir + "/" + file_name
-                            try:
-                                with open(local_filename, "wb") as file:
-                                    self.ftp.retrbinary("RETR " + file_name, file.write)
-                            except:
-                                loop_dir(next_dir, local_filename)
+                        next_dir = c_dir + "/" + file_name
+                        try:
+                            with open(local_filename, "wb") as file:
+                                self.ftp.retrbinary("RETR " + file_name, file.write)
+                        except:
+                            loop_dir(next_dir, local_filename)
 
-                loop_dir(c_path, os.path.join(local_file_path, c_path.split("/")[len(c_path.split("/")) - 2]))
+            loop_dir(ftp_path, local_path)
 
-            dir_url = await self.ftp_zip_dir(local_file_path, dir_name)
+            dir_name = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            dir_url = await self.ftp_zip_dir(local_path, dir_name, upload_ftp, delete_source)
             self.ftp.quit()
             return dir_url
         except Exception as e:
             logger.error(e)
-            return None
+            return False
 
-    async def ftp_zip_dir(self, tmp_dir, dir_name):
+    async def ftp_zip_dir(self, tmp_dir, dir_name, upload_ftp=True, delete_source=True):
         try:
             shutil.make_archive(tmp_dir, 'zip', tmp_dir)
             shutil.rmtree(tmp_dir)
-            f = open(tmp_dir + ".zip", "rb")
-            await self.upload_encrypted_data_to_ftp(f, settings.FTP_REMOTE_BACKUPS_PATH + "/" + dir_name + ".zip")
-            f.close()
-            os.remove(tmp_dir + ".zip")
+            if upload_ftp:
+                f = open(tmp_dir + ".zip", "rb")
+                await self.upload_encrypted_data_to_ftp(f, settings.FTP_REMOTE_BACKUPS_PATH + "/" + dir_name + ".zip")
+                f.close()
+            if delete_source:
+                os.remove(tmp_dir + ".zip")
 
         except Exception as e:
             logger.error(e)

@@ -32,8 +32,10 @@ class MenuManage(Base):
     table_code = Column(String(32), nullable=True, comment="菜单对应数据库表，后续一系列的增删改查")
     use_type = Column(Integer,
                       comment="使用类型：0：录入，1：查询，2：统计，3：到期提醒，"
-                              "4: 航点规划，5：航线规划，6：飞行监控，7：飞行回放"
-                              "8：飞行规划, 9：地面教学", default=0)
+                              "4：航点规划，5：航线规划，6：飞行监控，7：飞行回放"
+                              "8：飞行规划， 9：教学资源， 10: 题库管理， 11：教学日志"
+                              "12：课程管理，13：在线学习，14：考试管理，15：在线考试"
+                              "16：成绩管理", default=0)
     tree_mode = Column(Boolean, comment="是否可按树结构显示：ture：可以，false：不可以", default=False)
 
     parent_id = relationship("MenuManage", remote_side=[code], backref='menu_manage')  # 自关联

@@ -13,8 +13,8 @@ from src.utils.logger import logger, generate_mysql_log_data
 from src.db.models import FlyingService
 from src.utils.sql_config import sql_handle
 from src.utils.dependencies import DALGetter
-from fastapi import APIRouter, Depends, Query
-from src.utils.lesson_scheduling import gen_schedule, check_time
+from fastapi import APIRouter, Depends
+from src.utils.flight_planning_design import gen_schedule, check_time
 from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
 from src.utils.responses import resp_200, resp_404, resp_500
 from src.db.schemas.flying_manage import FlyingPlanSchema, CreateFlyingPlan, UpdateFlyingPlan, SearchFlyingPlan
@@ -22,7 +22,7 @@ from src.db.schemas.flying_manage import FlyingPlanSchema, CreateFlyingPlan, Upd
 router = APIRouter()
 
 
-@router.get('/{id_}', tags=['FlyingService'], summary="通过id获取飞行计划的信息")
+@router.get('/flying_service/{id_}', tags=['FlyingService'], summary="通过id获取飞行计划的信息")
 async def get_flying_service_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(FlyingService)
     logger.debug(f"通过id获取飞行计划的信息:{id_}")
@@ -34,7 +34,7 @@ async def get_flying_service_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
     return resp_200(data=data)
 
 
-@router.post('/search', tags=['FlyingService'], summary="获取所有飞行计划的信息")
+@router.post('/flying_service/search', tags=['FlyingService'], summary="获取所有飞行计划的信息")
 async def list_flying_service_info(
         dal: ExecDAL = Depends(DALGetter(ExecDAL)), *,
         input_data: SearchFlyingPlan):
@@ -46,7 +46,7 @@ async def list_flying_service_info(
     return resp_200(data={"data": data, "total": len(res)})
 
 
-@router.post('', tags=['FlyingService'], summary="创建一条飞行计划")
+@router.post('/flying_service', tags=['FlyingService'], summary="创建一条飞行计划")
 async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, input_data: CreateFlyingPlan):
     dal.setDb(FlyingService)
     logger.info(f"创建一条飞行计划:{input_data.dict()}")
@@ -131,7 +131,7 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
     return resp_200(data=plan_info)
 
 
-@router.post('/auto_batch', tags=['FlyingService'], summary="根据信息自动创建飞行计划")
+@router.post('/flying_service/auto_batch', tags=['FlyingService'], summary="根据信息自动创建飞行计划")
 async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, input_data: CreateFlyingPlan):
     dal.setDb(FlyingService)
     logger.info(f"根据信息自动创建飞行计划:{input_data.dict()}")
@@ -337,7 +337,7 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
     return resp_200(data=end_list, msg="飞行计划已自动创建")
 
 
-@router.delete('/{id_}', tags=['FlyingService'], summary="删除一条飞行计划")
+@router.delete('/flying_service/{id_}', tags=['FlyingService'], summary="删除一条飞行计划")
 async def delete_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str):
     dal.setDb(FlyingService)
     logger.info(f"删除一条飞行计划:{id_}")
@@ -356,7 +356,7 @@ async def delete_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
     return resp_200(data={'id': id_})
 
 
-@router.patch('/{id_}', tags=['FlyingService'], summary="编辑一条飞行计划")
+@router.patch('/flying_service/{id_}', tags=['FlyingService'], summary="编辑一条飞行计划")
 async def update_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                                 update_dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str,
                                 input_data: UpdateFlyingPlan):
@@ -429,7 +429,7 @@ async def update_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     return resp_200(data=list_data)
 
 
-@router.patch('/status/{id_}', tags=['FlyingService'],
+@router.patch('/flying_service/status/{id_}', tags=['FlyingService'],
               summary="更新飞行计划状态(计划中 1，正在进行 2，按计划完成 3，补签完成 4，过时未进行 5，已调整 6，已取消 7)")
 async def update_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str, status: int):
     dal.setDb(FlyingService)

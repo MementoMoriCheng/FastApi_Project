@@ -48,7 +48,7 @@ class CreateFlyingPlan(BaseModel):
     flight_duration: int = None
     start_time: str
     end_time: str
-    exclude_time: list
+    exclude_time: list = None
 
 
 class UpdateFlyingPlan(BaseModel):

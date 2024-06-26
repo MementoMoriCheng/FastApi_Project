@@ -51,6 +51,11 @@ class QuestionType:
         self.question_type_dict = None
 
     async def get_col(self):
+        """
+        获取列
+        Returns:
+
+        """
         table_name = settings.QUESTION_TYPE_TABLE
         self.question_type = settings.QUESTION_TYPE.split(',')
         self.question_type_dict = await sql_handle.select(table_name)
@@ -60,6 +65,11 @@ class QuestionType:
                 self.need_col = col
 
     async def get_question_type_dictionary(self):
+        """
+        获取题目类型字典
+        Returns:
+
+        """
         for con in self.question_type_dict:
             if con.get(self.need_col) == self.question_type[QuestionTypeIndex.SingleChoice]:
                 self.SingleChoice = con.get("id")
@@ -73,6 +83,14 @@ class QuestionType:
                 self.ShortAnswer = con.get("id")
 
     async def get_question_type(self, id_):
+        """
+        获取题目类型
+        Args:
+            id_:
+
+        Returns:
+
+        """
         for col in self.question_type_dict:
             if id_ == col.get("id"):
                 return self.question_type.index(col.get(self.need_col))
@@ -81,6 +99,7 @@ class QuestionType:
 class CalculateGrade:
     def __init__(self):
         self.qt = QuestionType()
+        self.q_bank = "auto_question_bank"
 
     @staticmethod
     def check_single_choice_answer(expected_answer: str, student_answer: str, score=None) -> bool:
@@ -212,6 +231,14 @@ class CalculateGrade:
 
     @staticmethod
     def preprocess_text(text):
+        """
+        处理文本
+        Args:
+            text:
+
+        Returns:
+
+        """
         text = text.strip()  # 去除首尾空白字符
         words = jieba.lcut(text)  # 分词
         words = [word.lower() for word in words if word.lower() not in stopwords.words('chinese')]  # 去除停用词并转为小写
@@ -264,9 +291,20 @@ class CalculateGrade:
                     if res and isinstance(res, bool):
                         stu_grade += q_s
                         q_score.append({"QID": q.get("QID"), "mark": q_s, "reviewed": True})
+                    elif not res and isinstance(res, bool):
+                        q_score.append({"QID": q.get("QID"), "mark": 0, "reviewed": True})
                     else:
                         stu_grade += res
                         q_score.append({"QID": q.get("QID"), "mark": res, "reviewed": True})
+
+                    # 记录得分次数
+                    if res:
+                        updated_data = {}
+                        update_conditions = {"QID": q.get("QID")}
+                        updated_data.update(
+                            {'scored_times': (q.get("scored_times") + 1) if q.get("scored_times") else 1})
+                        await sql_handle.update(self.q_bank, update_conditions, updated_data)
+
         return stu_grade, q_score
 
 
@@ -282,6 +320,11 @@ class ExamPaperGenerator:
         self.qt = QuestionType()
 
     async def load_single_choice_bank(self):
+        """
+        单选题
+        Returns:
+
+        """
         single_choices = await self.load_question_bank(self.qt.SingleChoice)
         question_bank = []
         for row in single_choices:
@@ -291,6 +334,11 @@ class ExamPaperGenerator:
         return question_bank
 
     async def load_multiple_choice_bank(self):
+        """
+        多选题
+        Returns:
+
+        """
         multiple_choices = await self.load_question_bank(self.qt.MultipleChoice)
         question_bank = []
         for row in multiple_choices:
@@ -300,6 +348,11 @@ class ExamPaperGenerator:
         return question_bank
 
     async def load_fill_bank(self):
+        """
+        填空题
+        Returns:
+
+        """
         fills = await self.load_question_bank(self.qt.Fill)
         question_bank = []
         for row in fills:
@@ -309,6 +362,11 @@ class ExamPaperGenerator:
         return question_bank
 
     async def load_judge_bank(self):
+        """
+        判断题
+        Returns:
+
+        """
         judges = await self.load_question_bank(self.qt.Judge)
         question_bank = []
         for row in judges:
@@ -318,6 +376,11 @@ class ExamPaperGenerator:
         return question_bank
 
     async def load_short_answer_bank(self):
+        """
+        简答题
+        Returns:
+
+        """
         short_answers = await self.load_question_bank(self.qt.ShortAnswer)
         question_bank = []
         for row in short_answers:
@@ -327,6 +390,16 @@ class ExamPaperGenerator:
         return question_bank
 
     async def load_question_bank(self, question_type, limit=100, is_desc=True):
+        """
+        题库选题
+        Args:
+            question_type:
+            limit:
+            is_desc:
+
+        Returns:
+
+        """
         conditions = {"type": question_type}
         # 试题范围
         if self.course:
@@ -337,6 +410,15 @@ class ExamPaperGenerator:
         return question_bank
 
     async def generate_exam(self, question_type_counts, course):
+        """
+        生成试卷
+        Args:
+            question_type_counts:
+            course:
+
+        Returns:
+
+        """
         self.course = course
         await self.qt.get_col()
         await self.qt.get_question_type_dictionary()

@@ -35,6 +35,7 @@ class ColumnManage(Base):
     sort = Column(Float, comment="列排序: x.5: 左侧侧固定; x.9: 右侧固定 X:整型普通排序", default=0)
     status = Column(Integer, comment="列状态：1：显示，2：隐藏", default=1)
     field_length = Column(Integer, nullable=True, comment="varchar列的长度")
+    save_length = Column(Integer, nullable=True, comment="存储列的长度")
     is_delete = Column(Integer, comment="是否删除, 1：删除、0：保留，默认值：0", default=0)
 
     code = Column(String(32), nullable=False, unique=False, comment="字段名（英文，用于建表）")
@@ -43,7 +44,10 @@ class ColumnManage(Base):
     primary = Column(Boolean, nullable=True, comment="是否为主键")
     unique = Column(Boolean, nullable=True, comment="是否唯一")
     is_encrypt = Column(Boolean, nullable=True, comment="是否加密")
+    auto_generate = Column(Boolean, nullable=True, comment="自动生成，仅限于int类型")
+
     association = Column(Text().with_variant(JSON, "mysql"), comment="定义关联字段，可定义多个，数组表示")
+    rules = Column(Text().with_variant(JSON, "mysql"), nullable=True, comment="校验规则")
 
     description = Column(Text().with_variant(JSON, "mysql"), comment="字段描述")
     create_user = Column(String(32), comment="创建人")

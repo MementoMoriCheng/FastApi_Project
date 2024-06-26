@@ -4,14 +4,14 @@
 # @Author  : MementoMori
 # @File    : sql_handle.py
 # @Software: PyCharm
-from src.config.setting import settings
-from sqlalchemy.exc import SQLAlchemyError
 from src.db.config import session
 from src.utils.logger import logger
+from src.config.setting import settings
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 from src.static import column_type, update_column_type
 from sqlalchemy import (Column, MetaData, Table, text, String,
                         PrimaryKeyConstraint, create_engine, and_, select, inspect)
-from sqlalchemy.orm import sessionmaker
 from src.utils.constant import LOG_RECORDS, GNSS_RECORDS, FLIGHT_DATA, FLIGHT_ALARM
 
 database_uri = f"{settings.DATABASE_URI}/{settings.DB_NAME}"
@@ -26,8 +26,8 @@ class SqlHandle(object):
         try:
             self.metadata = MetaData()
             self.metadata.reflect(bind=self.engine)
-        except:
-            pass
+        except Exception as err:
+            logger.error(err)
 
     def get_sync_session(self):
         return self.Session()
@@ -60,10 +60,10 @@ class SqlHandle(object):
                 operand) == 2, "Between operator requires a tuple with two elements"
             lower_bound, upper_bound = operand
             return column.between(lower_bound, upper_bound)
-        elif operator == "gt":
-            return column > operand
-        elif operator == "lt":
-            return column < operand
+        elif operator == "gte":
+            return column >= operand
+        elif operator == "lte":
+            return column <= operand
         elif operator == "startWith":
             return column.startswith(operand)
         elif operator == "not_startWith":
@@ -152,6 +152,36 @@ class SqlHandle(object):
                     session.commit()
         except SQLAlchemyError as e:
             logger.error(f"Update error for table {table_name}: {e}")
+            session.rollback()
+            raise e
+
+    async def batch_update(self, table_name, conditions_list, updated_data_list):
+        """
+        批量更新表中的数据
+        Args:
+            table_name: 表名
+            conditions_list: 条件列表，每个元素是一个字典，表示一个更新条件
+            updated_data_list: 更新数据列表，每个元素是一个字典，表示要更新的字段及其新值
+
+        Returns:
+
+        """
+        try:
+            with self.get_sync_session() as session:
+                table = self._get_table(table_name)
+                # 遍历条件和更新数据的列表，执行逐个更新
+                for conditions, update_values in zip(conditions_list, updated_data_list):
+                    condition_clause = and_(*[getattr(table.c, k) == v for k, v in conditions.items()])
+                    # 构造针对当前条件的更新值
+                    session.query(table).filter(condition_clause).update(update_values, synchronize_session=False)
+                session.commit()
+                logger.info(f"Successfully batch updated rows in table {table_name}.")
+        except SQLAlchemyError as e:
+            logger.error(f"Batch update error for table {table_name}: {e}")
+            session.rollback()
+            raise e
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during batch update: {e}")
             session.rollback()
             raise e
 
@@ -385,7 +415,6 @@ class SqlHandle(object):
 
             pk_sql = f"ALTER TABLE {table_name} ADD PRIMARY KEY ({column_name});"
             self.execute_stmt(pk_sql)
-            # self.execute_stmt(drop_pk_increment_sql)
 
         if not is_empty:
             is_empty_sql = f"ALTER TABLE {table_name} MODIFY {column_name} {new_column_type}({varchar_len}) NOT NULL;" \

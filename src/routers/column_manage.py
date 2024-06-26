@@ -64,6 +64,7 @@ async def get_column_info(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id: str
 async def create_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                         table_dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: CreateColumnManage):
     table_dal.setDb(TableManage)
+    dal.setDb(ColumnManage)
     logger.info(f"创建数据库表的列:{obj_in.dict()}")
     table_res = await table_dal.get(obj_in.table_id)
     if not table_res:
@@ -72,17 +73,23 @@ async def create_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     table_code = f"auto_{table_res.code}"
     if not obj_in.is_parent:
         try:
+            obj_in.save_length = obj_in.field_length
             if obj_in.association:
                 obj_in.field_length = COLUMN_LENGTH
+                try:
+                    col_infos = await dal.get_by(code=obj_in.association[0].get("tableCol"))
+                    obj_in.save_length = col_infos.field_length
+                except Exception as e:
+                    logger.error(e)
             sql_handle.upgrade_columns(table_code, obj_in.code, obj_in.type, obj_in.field_length)
             await sql_handle.change_columns(table_code, obj_in.code, obj_in)
             sql_handle.add_foreign_key(table_code, obj_in.code, obj_in.association)
             sql_handle.refresh_metadata()
         except Exception as e:
             # 删除列
-            sql_handle.downgrade_columns(table_code, obj_in.code)
+            sql_handle.downgrade_columns(table_code, [obj_in.code])
             return resp_400(msg=str(e))
-    dal.setDb(ColumnManage)
+
     res = await dal.create(obj_in)
     if not res:
         return resp_404()
