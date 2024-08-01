@@ -45,6 +45,8 @@ class ColumnManage(Base):
     unique = Column(Boolean, nullable=True, comment="是否唯一")
     is_encrypt = Column(Boolean, nullable=True, comment="是否加密")
     auto_generate = Column(Boolean, nullable=True, comment="自动生成，仅限于int类型")
+    read_only = Column(Boolean, nullable=True, comment="只读列")
+    repeatable = Column(Boolean, nullable=True, comment="只读列")
 
     association = Column(Text().with_variant(JSON, "mysql"), comment="定义关联字段，可定义多个，数组表示")
     rules = Column(Text().with_variant(JSON, "mysql"), nullable=True, comment="校验规则")

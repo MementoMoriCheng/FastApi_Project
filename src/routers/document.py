@@ -110,7 +110,7 @@ async def upload_files_to_ftp(
         files: List[UploadFile],
         table_code: str = Form(...), id_: str = Form(...), col_name=Form(...), user_id: str = None):
     # 存储新文件名的列表
-    document_objs = []
+    document_objs, table_code = [], table_code.lower()
     for file in files:
         filename = file.filename
         extension = filename.split(".")[-1]
@@ -218,9 +218,9 @@ async def download_file(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, id_: str)
 
 
 @router.get("/download_file_url/", tags=["Document"], summary="通过url下载文件")
-async def download_file(url: str, path: str = None):
+async def download_file_by_url(url: str, path: str = None):
     """
-    下载单个文件
+    通过url下载文件
     """
     db_name = url.split("/")[-1]
     remote_filename = url
@@ -229,6 +229,6 @@ async def download_file(url: str, path: str = None):
         response = await service.download_ftp_backup_file(db_name, remote_filename, download=True, user_path=path)
         if not response:
             return resp_422(msg="No documentation data is available")
-        return resp_200()
+        return response
     except Exception as e:
         return resp_422(msg=f"FTP service exception {e}")

@@ -4,15 +4,14 @@
 # @Author  :
 # @File    :
 # @Software: PyCharm
-import copy
-import random
-import itertools
-from src.utils.sql_config import sql_handle
-from datetime import timedelta, time, datetime
+from src.utils.tools import filter_list
 from src.config.setting import settings
-from .constant import DEFAULT_PLY, SubjectSchedulingPriority, SchedulingCondition, AIRCRAFT_ID, FLIGHT_PLAN_PARAMETER, \
-    FLIGHT_PLAN_CONTENT, AIRCRAFT_TYPE
-from .tools import filter_list
+from datetime import timedelta, datetime
+from src.utils.sql_config import sql_handle
+from src.utils.constant import DEFAULT_PLY, SubjectSchedulingPriority, SchedulingCondition, AIRCRAFT_ID, \
+    FLIGHT_PLAN_PARAMETER, FLIGHT_PLAN_CONTENT, AIRCRAFT_TYPE, PLAN_ROUTE, PLAN_COACH, COACH_NAME_COL, FLYABLE_ITEM, \
+    NO_FLY_ITEM, PLANE_STATUS, AIRCRAFT_STATUS, STATUS_NUMBER, STATUS_CONTENT, AIRSPACE_TABLE, AIRSPACE_AIRPORT, \
+    AIRSPACE, ADJACENT_AIRSPACE, AIRSPACE_NUMBER, STUDENT_CODE_NAME
 
 
 def parse_input(obj_in):
@@ -24,10 +23,10 @@ def parse_input(obj_in):
     Returns:
 
     """
-    fly_route_ids = obj_in.get("route_ids", [])
-    plane_ids = obj_in.get("plane_ids", [])
-    coach_ids = obj_in.get("coach_ids", [])
-    student_ids = obj_in.get("student_ids", [])
+    fly_route_ids = obj_in.get("fly_route").get("id", [])
+    plane_ids = obj_in.get("plane").get("id", [])
+    coach_ids = obj_in.get("coach").get("id", [])
+    student_ids = obj_in.get("student").get("id", [])
     plan_duration = obj_in.get("flight_duration")
 
     start_time_str = obj_in.get("start_time")
@@ -385,6 +384,7 @@ def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_
     handle_user = input_info.get("handle_user")
     handle_reason = input_info.get("handle_reason")
     flight_route = input_info.get("fly_route_infos")
+    pid = input_data.get("PID")
 
     def gen_time_period(available_src, flight_interval=0):
         time_period = []
@@ -429,9 +429,10 @@ def gen_schedule(input_data, expand_data, maintenance_period, coach_time, route_
                          "handle_user": handle_user,
                          "handle_reason": handle_reason,
                          "status": status,
-                         "name": name if name else f"auto_plan_{assignment[0]}",
+                         "name": name if name else f"plan_{pid}",
                          "description": description,
-                         "expand_data": {}
+                         "expand_data": {},
+                         "PID": pid
                          }
         schedule_info.update(plan_time_start=final_times[idx][0], plan_time_end=final_times[idx][1],
                              real_time_start=final_times[idx][0], real_time_end=final_times[idx][1],
@@ -454,24 +455,32 @@ class FlightAlgorithDesign:
         信息收集阶段，主要进行气象信息、飞机信息、人员信息、课目信息、训练进度信息和安全信息的收集
         具体的参数有：组训单位、计划类型、开飞时刻、占场时间、参训飞机、计划批次、参训教员与学员、参训课目、
         空域使用、指定练习次数与搭配、任务机指定人员、指挥员和其他限定信息
+        Args:
+            conditions: {"id":flight_plan_base表id}
+
+        Returns:
 
         """
         # 获取计划信息
         pid, _ = await self.get_plan_base_information(conditions)
-
+        if not pid:
+            return None, None, None, None
+        self.plan_parameter.update(PID=pid)
         # 收集参训人员信息
-        await self.get_plan_pilot_information(pid)
+        u_info, stu_con = await self.get_plan_pilot_information(pid)
+
+        # 查看训练进度,课目信息
+        await self.get_plan_subject_information(pid)
 
         # 收集参训飞机信息
-        await self.get_plan_plane_information(pid)
+        a_id, plane_con = await self.get_plan_plane_information(pid)
 
-        # 查看训练进度
-        await self.get_plan_subject_information(pid)
-        # TODO 暂时不考虑下述条件
         # 查看课目信息
+
+        # 暂时不考虑下述条件
         # 查看天气信息
         # 收集安全等信息
-        return self.plan_parameter, self.plan_content
+        return self.plan_parameter, self.plan_content, plane_con, stu_con
 
     async def get_plan_base_information(self, conditions):
         """
@@ -485,82 +494,123 @@ class FlightAlgorithDesign:
         # 获取计划信息
         fpb_res = await sql_handle.select(settings.FLIGHT_PLAN_BASE, conditions)
         if not fpb_res:
-            return
+            return None, None
         plan_info = fpb_res[0]
+        big_pid = plan_info['PID']
         pid = plan_info.get("id")
         display = plan_info.get("display")
 
-        # start_date = plan_info.get("takeoff")  # 开飞
         takeoff_time = plan_info.get("takeoff")  # 开飞
         end_time = plan_info.get("end")  # 结束
         status = plan_info.get("status")  # 结束
-        coach_ids = [plan_info.get("chief_director_1"), plan_info.get("chief_director_2"),
-                     plan_info.get("deputy_director_1"), plan_info.get("deputy_director_2"),
-                     plan_info.get("trainee_director_1"), plan_info.get("trainee_director_2")]
         # 航线信息
         route_ids = [plan_info.get("route_1"), plan_info.get("route_2")]
-        # 收集参训飞机信息
-        # mission_aircraft = plan_info.get("mission_aircraft")  # 任务机
-        # standby_aircraft = plan_info.get("standby_aircraft")  # 备份机
+        route_dict = {}
+        for route_id in route_ids:
+            route_res = await sql_handle.select(PLAN_ROUTE, {"id": route_id})
+            if not route_res:
+                continue
+            air_route, flight_time = route_res[0].get("id"), route_res[0].get("flight_time")
+            route_dict[air_route] = flight_time
+        self.plan_parameter.update(flight_duration=route_dict)
         # 处理空数据
-        coach_ids = filter_list(coach_ids)
+        coach_ids = await self.get_plan_coach_information()
         route_ids = filter_list(route_ids)
+        route_ids = await self.get_plan_route_information(route_ids)
         self.plan_parameter.update(start_time=takeoff_time, end_time=end_time, coach_ids=coach_ids, route_ids=route_ids,
                                    name=display)
-        self.plan_content.update(PID=pid, current_status=status)
+        self.plan_content.update(PID=big_pid, current_status=status)
         return pid, plan_info
 
     async def get_plan_pilot_information(self, pid):
         """
-        参训人员
+        参训学员，不考虑其他因素，按最简单的来
         Args:
             pid:flight_plan_base表id
 
         Returns:
+            u_flight_outline飞行大纲
+        """
+        u_info, u_name = [], []
+        uid_res = await sql_handle.select(settings.STUDENT_TABLE)
+        for stu_uid in uid_res:
+            u_info.append({"id": stu_uid.get("id"), "uid": stu_uid.get("UID"), "student_name": stu_uid.get("name"),
+                           "student_code_name": stu_uid.get(STUDENT_CODE_NAME),
+                           "flight_outline": stu_uid.get("flight_outline")})
+            # 飞行大纲
+            u_name.append(
+                {pid: {"id": stu_uid.get("id"), "uid": stu_uid.get("UID"), "student_name": stu_uid.get("name"),
+                       "student_code_name": stu_uid.get(STUDENT_CODE_NAME)}})
+        self.plan_parameter.update(student_ids=u_info)
+        return u_info, u_name
+
+    async def get_plan_route_information(self, ids):
+        """
+        参训航线
+        Args:
+            ids:
+
+        Returns:
 
         """
-        condition = {"PID": pid}
-        fpp_res = await sql_handle.select(settings.FLIGHT_PLAN_PILOT, conditions=condition)
-        if not fpp_res:
-            return
-        fpp_info = fpp_res[0]
-        flight_duration = fpp_info.get("time")
-        uid = fpp_info.get("UID")
-        uid_condition = {"id": uid}
-        uid_res = await sql_handle.select(settings.STUDENT_TABLE, conditions=uid_condition)
-        # TODO 姓名，代号
-        u_id = []
-        for stu_uid in uid_res:
-            u_id.append(stu_uid.get("UID"))
-        self.plan_parameter.update(student_ids=u_id, flight_duration=flight_duration)
+        res = []
+        for id_ in ids:
+            condition = {"id": id_}
+            fpr_res = await sql_handle.select(PLAN_ROUTE, conditions=condition)
+            if not fpr_res:
+                return
+            fpr_info = fpr_res[0]
+            air_route = fpr_info.get("air_route")
+            res.append({"id": id_, "air_route": air_route})
+        return res
+
+    async def get_plan_coach_information(self, ids=None):
+        """
+        参训教员，不考虑其他因素，按最简单的来
+        Args:
+            ids:
+
+        Returns:
+
+        """
+        res = []
+        if not ids:
+            fpc_res = await sql_handle.select(PLAN_COACH)
+            for fpc in fpc_res:
+                coach_name = fpc.get(COACH_NAME_COL)
+                res.append({"id": fpc.get("id"), "coach_name": coach_name})
+        else:
+            for id_ in ids:
+                condition = {"id": id_}
+                fpc_res = await sql_handle.select(PLAN_COACH, conditions=condition)
+                if not fpc_res:
+                    return res
+                fpc_info = fpc_res[0]
+                coach_name = fpc_info.get(COACH_NAME_COL)
+                res.append({"id": id_, "coach_name": coach_name})
+        return res
 
     async def get_plan_plane_information(self, pid):
         """
-        飞机
+        飞机，不考虑其他因素，按最简单的来
         Args:
             pid:flight_plan_base表id
 
         Returns:
 
         """
-        condition = {"PID": pid}
-        fpp_res = await sql_handle.select(settings.FLIGHT_PLAN_PLANE, conditions=condition)
-        if not fpp_res:
-            return
-        fpp_info = fpp_res[0]
-        aircraft_id = fpp_info.get("aircraft_id")
-        aircraft_id_condition = {"id": aircraft_id}
-        aircraft_id_res = await sql_handle.select(settings.PLANE_TABLE, conditions=aircraft_id_condition)
-        a_id = []
+        a_id, plane_con = [], []
+        aircraft_id_res = await sql_handle.select(settings.PLANE_TABLE)
         for stu_uid in aircraft_id_res:
-            a_id.append(stu_uid.get(AIRCRAFT_ID))
-        self.plan_parameter.update(plane_ids=a_id)
-        self.plan_content.update(aircraft_id=aircraft_id_res[0].get("id"),
-                                 aircraft_type=aircraft_id_res[0].get(AIRCRAFT_TYPE))
+            a_id.append({"id": stu_uid.get("id"), "plane_id": stu_uid.get(AIRCRAFT_ID)})
+            plane_con.append({pid: {"id": stu_uid.get("id"), "plane_id": stu_uid.get(AIRCRAFT_ID),
+                                    "plane_type": stu_uid.get(AIRCRAFT_TYPE)}})
+            self.plan_parameter.update(plane_ids=a_id)
+        return a_id, plane_con
 
     async def get_plan_subject_information(self, pid):
         """
-        训练进度
+        课目信息，不考虑其他因素，按最简单的来
         Args:
             pid:flight_plan_base表id
 
@@ -574,18 +624,17 @@ class FlightAlgorithDesign:
         fps_info = fps_res[0]
         sid = fps_info.get("SID")
 
-        fps_d_condition = {"SID": sid}
+        fps_d_condition = {"id": sid}
         fps_d_res = await sql_handle.select(settings.FLIGHT_SUBJECT_DETAILS, conditions=fps_d_condition)
         if not fps_d_res:
             return
         fps_d_info = fps_res[0]
-        # flight_interval = fps_d_info.get("launch_interval")
-        flight_interval = 15
+        # 阶段、课程（昼间、特技、多发、补训）、飞行人数、使用空域
+        flight_interval = fps_d_info.get("launch_interval") if fps_d_info.get("launch_interval") else 30
         self.plan_parameter.update(flight_interval=flight_interval)
         self.plan_content.update(launch_interval=flight_interval)
 
     def computation_orchestration_phase(self):
-
         """
         计算编排阶段，主要是确定出动飞机数和参训课目，计算开飞时刻和占场时间，计算课目安排顺序、架次和位置，计算人员安排顺序、架次
         """
@@ -653,16 +702,23 @@ class FlightAlgorithDesign:
         # （3）安排带飞教员
 
     @staticmethod
-    def calculate_course_progress(course_time, people_number):
+    async def calculate_course_progress(sid):
         """
         课目进度（课目人均飞行时间）=课目总时间÷人数
-        Args:
             course_time:课目总时间
             people_number:人数
+        Args:
+            sid: 练习号 ID
 
         Returns:
 
         """
+        conditions = {"id": sid}
+        fsd_res = await sql_handle.select(settings.FLIGHT_SUBJECT_DETAILS, conditions)
+        if not fsd_res:
+            return
+        fsd_info = fsd_res[0]
+        course_time, people_number = fsd_info["time"], fsd_info["number_of_fliers"]
         return course_time / people_number
 
     def comparison_training_program(self, course_progress, training_program_time):
@@ -704,30 +760,52 @@ class FlightAlgorithDesign:
         else:
             return SubjectSchedulingPriority.Lowest
 
-    def plane_condition(self, status, number):
+    @staticmethod
+    async def plane_condition():
         """
         飞机的状况和数量对课目编排的影响,例如：刚完成大修的飞机需要试飞，因此，这些飞机将首先编排“试飞”课目；刚换发动机的飞机需
         要磨发，因此，这些飞机将首先编排“磨发”课目
         Args:
-            status:
-            number:
 
         Returns:
 
         """
-        pass
+        plane_list = []
+        plane_res = await sql_handle.select(settings.PLANE_TABLE)
+        plane_status_res = await sql_handle.select(AIRCRAFT_STATUS)
+        for plane in plane_res:
+            for plane_status in plane_status_res:
+                if plane_status["id"] == plane[PLANE_STATUS]:
+                    plane_list.append({
+                        "aircraft_id": plane[AIRCRAFT_ID],
+                        "flyable_item": plane[FLYABLE_ITEM],
+                        "no_fly_item": plane[NO_FLY_ITEM],
+                        "plane_status_content": plane_status[STATUS_CONTENT],
+                        "plane_status_number": plane_status[STATUS_NUMBER],
+                    })
+        print(plane_list)
+        return plane_list
 
-    def airspace_condition(self, status, number):
+    @staticmethod
+    async def airspace_condition():
         """
         空域占用情况和可用空域数量对课目编排的影响
         Args:
-            status:
-            number:
 
         Returns:
 
         """
-        pass
+        airspace_list = []
+        airspace_res = await sql_handle.select(AIRSPACE_TABLE)
+        for airspace in airspace_res:
+            airspace_list.append({
+                "airspace_airport": airspace[AIRSPACE_AIRPORT],
+                "airspace": airspace[AIRSPACE],
+                "adjacent_airspace": airspace[ADJACENT_AIRSPACE],
+                "airspace_number": airspace[AIRSPACE_NUMBER]
+            })
+        print(airspace_list)
+        return airspace_list
 
     def ratio_of_coach_and_student(self, coach, student):
         """
@@ -759,3 +837,9 @@ class FlightAlgorithDesign:
 
 
 flight_design = FlightAlgorithDesign()
+
+if __name__ == '__main__':
+    import asyncio
+
+    flight_design = FlightAlgorithDesign()
+    asyncio.run(flight_design.airspace_condition())

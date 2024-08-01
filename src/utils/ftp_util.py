@@ -1,17 +1,16 @@
 # !/usr/bin/python
 # -*- coding: utf-8 -*-
-import datetime
 import os
 import shutil
+import base64
+import datetime
 import traceback
 from ftplib import FTP
 
-from fastapi.responses import FileResponse
-from cryptography.fernet import Fernet
-
-from src.config.setting import settings
 from src.utils.logger import logger
-import base64
+from cryptography.fernet import Fernet
+from src.config.setting import settings
+from fastapi.responses import FileResponse
 
 
 class FTPError(Exception):
@@ -70,11 +69,31 @@ class RemoteFTPService:
                 self.ftp.mkd(directory)
             return False
 
+    async def list_file(self, dir):
+        try:
+            self.ftp.set_pasv(True)
+            file_list = self.ftp.nlst(dir)
+
+            file_names = []
+            for item in file_list:
+                file_names.append(os.path.basename(item))
+
+            return file_names
+        except:
+            return None
+
     async def upload_encrypted_data_to_ftp(self, file_data, remote_file_path):
         self.ftp.set_pasv(True)
         f_path = os.path.dirname(remote_file_path)
         await self.is_directory_exists(f_path, True)
         self.ftp.storbinary(f'STOR {remote_file_path}', file_data, self.buffer_size)
+
+    async def download_ftp_file_origin(self, filename, remote_filename):
+        self.ftp.set_pasv(True)
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        local_file_path = os.path.join(base_dir, "tmp", filename)
+        with open(local_file_path, 'wb') as f:
+            self.ftp.retrbinary(f'RETR {remote_filename}', f.write)
 
     async def download_ftp_file_encode(self, filename, remote_filename):
         self.ftp.set_pasv(True)
@@ -125,7 +144,9 @@ class RemoteFTPService:
         self.ftp.quit()
 
         if download:
-            return FileResponse(local_file_path)
+            return FileResponse(local_file_path,
+                                media_type='application/x-zip-compressed',
+                                headers={"Content-Disposition": f"attachment; filename={filename}"})
         return local_file_path
 
     def remote_ftp_close(self):

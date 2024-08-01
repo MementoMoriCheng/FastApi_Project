@@ -86,11 +86,17 @@ class WebSocketService:
                 select_condition = {"identify_code": recv_data.get("code"), "is_delete": RESERVE}
 
                 if recv_data["playback"]:
+                    select_condition["flight_time"] = {"value": recv_data.get("flight_time"), "operator": "includes"}
                     way_point = recv_data["way_point"] if recv_data.get("way_point") else 10
                     data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition,
                                                         fields=gnss_fields,
                                                         order_by={"gps_milliseconds": True})
-                    for data in range(1, len(data_info), len(data_info) // way_point):
+                    data_length = len(data_info)
+                    if data_length == 0:
+                        message = json.dumps({"type": "send", "content": ""})
+                        await self.callback_send(message, websocket=websocket)
+                        break
+                    for data in range(1, data_length, data_length // way_point):
                         message = json.dumps({"type": "send", "content": data_info[data] if data else " "})
                         await self.callback_send(message, websocket=websocket)
                 else:
@@ -98,11 +104,9 @@ class WebSocketService:
                                                         fields=gnss_fields,
                                                         order_by={"gps_milliseconds": False})
                     message = json.dumps({"type": "send", "content": data_info[0] if data_info else " "})
-
                     update_condition = {"id": data_info[0]["id"]}
                     data_info[0]["is_delete"] = 1
                     await sql_handle.update(FLIGHT_DATA_TABLE, update_condition, data_info[0])
-
                     await self.callback_send(message, websocket=websocket)
 
             # 链接断开
@@ -118,7 +122,7 @@ class WebSocketService:
                     Clients.remove(websocket)
                 break
             # 报错
-            except (Exception, JSONDecodeError) as e:
+            except (Exception, JSONDecodeError, ValueError, TypeError, KeyError) as e:
                 logger.error("WSlinkError ", e)
                 if websocket in Clients:  # 先检查连接是否存在
                     Clients.remove(websocket)

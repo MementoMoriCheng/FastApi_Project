@@ -4,7 +4,7 @@ from pydantic import BaseModel, constr
 
 
 class CreateDataHandle(BaseModel):
-    name: str
+    name: str = None
     user_id: str = None
     handle_type: int = 1
     url: str = None

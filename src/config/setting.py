@@ -7,8 +7,8 @@
 import os
 from typing import List
 
-from pydantic import BaseSettings
 from dotenv import dotenv_values
+from pydantic import BaseSettings
 
 backend = os.path.dirname(os.path.abspath(__file__))
 rootp = backend[:backend.find("flight-training-server") + len("flight-training-server")]
@@ -65,6 +65,7 @@ class Settings(BaseSettings):
 
     WEBSOCKET_ADDRESS: str = dotenv_config.get("WEBSOCKET_ADDRESS")
     WEBSOCKET_PORT: int = dotenv_config.get("WEBSOCKET_PORT")
+    WS_CONFIG: str = dotenv_config.get("WS_CONFIG")
 
     GNSS_FIELDS: str = dotenv_config.get("GNSS_FIELDS")
 
@@ -75,6 +76,8 @@ class Settings(BaseSettings):
     UNSYNC_USER_URL: str = dotenv_config.get("UNSYNC_USER_URL")
 
     QUESTION_TYPE_TABLE: str = dotenv_config.get("QUESTION_TYPE_TABLE")
+    QUESTION_MAJOR: str = dotenv_config.get("QUESTION_MAJOR")
+    QUESTION_COURSE: str = dotenv_config.get("QUESTION_COURSE")
     QUESTION_TYPE: str = dotenv_config.get("QUESTION_TYPE")
 
     EXAMINATION: str = dotenv_config.get("EXAMINATION")
@@ -91,6 +94,8 @@ class Settings(BaseSettings):
     FLIGHT_SUBJECT_DETAILS: str = dotenv_config.get("FLIGHT_SUBJECT_DETAILS")
     STUDENT_TABLE: str = dotenv_config.get("STUDENT_TABLE")
     PLANE_TABLE: str = dotenv_config.get("PLANE_TABLE")
+    FLIGHT_ROUTE: str = dotenv_config.get("FLIGHT_ROUTE")
+    FLIGHT_WAYPOINT: str = dotenv_config.get("FLIGHT_WAYPOINT")
 
     CITY_NAME: str = dotenv_config.get("CITY_NAME")
     COUNTRY: str = dotenv_config.get("COUNTRY")
@@ -104,6 +109,12 @@ class Settings(BaseSettings):
     RESTORE_PATH: str = dotenv_config.get("RESTORE_PATH")
 
     SYNC_DATAS: str = dotenv_config.get("SYNC_DATAS")
+
+    MAP_INTERFACE: str = dotenv_config.get("MAP_INTERFACE")
+
+    DEFAULT_PASSWORD: str = dotenv_config.get("DEFAULT_PASSWORD")
+    DEFAULT_ROLE_ID: str = dotenv_config.get("DEFAULT_ROLE_ID")
+    DEFAULT_SYSTEM_ID: str = dotenv_config.get("DEFAULT_SYSTEM_ID")
 
 
 settings = Settings()

@@ -52,10 +52,10 @@ class AstralTimeCalculator:
         dusk = s["dusk"]
 
         return {
-            "daybreak": dawn.strftime('%H:%M'),
-            "sunrise": sunrise.strftime('%H:%M'),
-            "sunset": sunset.strftime('%H:%M'),
-            "dark": dusk.strftime('%H:%M')
+            "daybreak": dawn.strftime('%Y-%m-%d %H:%M:%S'),
+            "sunrise": sunrise.strftime('%Y-%m-%d %H:%M:%S'),
+            "sunset": sunset.strftime('%Y-%m-%d %H:%M:%S'),
+            "dark": dusk.strftime('%Y-%m-%d %H:%M:%S')
         }
 
 
@@ -88,9 +88,18 @@ class RecognitionAndEvaluationAlgorithm:
         Returns:
 
         """
+
+        def recognition_takeoff():
+            rollout, rotate, lift_off, retract_landing_gear, climb_out = False, False, False, False, False
+
+        def recognition_landing():
+            retract_landing_gear, flare, touchdown, rollout = False, False, False, False
+
         # 这里需要定义具体的条件来分割飞行阶段，例如基于时间或高度的变化
         takeoff, mission, landing = None, None, None
         # 实现逻辑来确定每个阶段的数据范围
+        for con in enumerate(data):
+            pass
         return takeoff, mission, landing
 
     def recognition_action(self, data):
@@ -107,6 +116,70 @@ class RecognitionAndEvaluationAlgorithm:
             # 根据滑跑、抬前轮、离地等条件判断并添加动作到actions列表
             pass
         return actions
+
+    def landing_and_takeoff_exercises(self, single_data):
+        """
+        起落课目
+        Returns:
+
+        """
+        pass
+
+    def roll_maneuver(self, single_data):
+        """
+        横滚动作
+        Returns:
+
+        """
+        pass
+
+    def barrel_roll_maneuver(self, single_data):
+        """
+        桶滚动作
+        Returns:
+
+        """
+        pass
+
+    def loop_maneuver(self, single_data):
+        """
+        斤斗动作
+        Returns:
+
+        """
+        pass
+
+    def turn_or_spiral_maneuver(self, single_data):
+        """
+        盘旋动作
+        Returns:
+
+        """
+        pass
+
+    def dive_maneuver(self, single_data):
+        """
+        俯冲动作
+        Returns:
+
+        """
+        pass
+
+    def pitch_up_or_climbing_maneuver(self, single_data):
+        """
+        跃升动作
+        Returns:
+
+        """
+        pass
+
+    def tailslide_or_astern_slide(self, single_data):
+        """
+        尾冲
+        Returns:
+
+        """
+        pass
 
     def recognition_action_phase(self, action_data):
         """
@@ -148,6 +221,15 @@ class RecognitionAndEvaluationAlgorithm:
             return sum(scores) / len(scores)
         return 0
 
+
+calculator = AstralTimeCalculator(
+    city_name=settings.CITY_NAME,
+    country=settings.COUNTRY,
+    region=settings.REGION,
+    latitude=float(settings.LATITUDE),
+    longitude=float(settings.LONGITUDE),
+    timezone_str=settings.TIMEZONE_STR
+)
 
 if __name__ == "__main__":
     import asyncio

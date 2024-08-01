@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/05/15
 # @Author  : MementoMori
-# @File    : tools.py
+# @File    : exam_related_tools.py
 # @Software: PyCharm
 # @desc    : 考试相关工具类
 import json
@@ -25,11 +25,11 @@ def cal_grade_percentage(grade_list):
     """
     ideal_num, good_num, pass_num, flunk_num, total = 0, 0, 0, 0, len(grade_list)
     for grade in grade_list:
-        if grade.total_score >= 85:
+        if grade >= 90:
             ideal_num += 1
-        elif 70 <= grade.total_score < 85:
+        elif 70 <= grade < 90:
             good_num += 1
-        elif 60 <= grade.total_score < 70:
+        elif 60 <= grade < 70:
             pass_num += 1
         else:
             flunk_num += 1
@@ -470,16 +470,59 @@ class ExamPaperGenerator:
         total = sum(scores)
         return total == 100
 
+    async def number_of_questions_available(self, course=None):
+        """
+        试题数目
+        Args:
+            course: 课程
+
+        Returns:
+
+        """
+
+        async def get_numbers(course_, type_=None):
+            if course_ and type_:
+                conditions = {"course": {"value": course_, "operator": "equal"},
+                              "type": {"value": type_, "operator": "equal"}}
+            else:
+                conditions = {"course": {"value": course_, "operator": "equal"}}
+            count = await sql_handle.select(self.table_name, conditions=conditions)
+            return len(count)
+
+        # 试题范围
+        total_count = await get_numbers(course)
+        await self.qt.get_col()
+        await self.qt.get_question_type_dictionary()
+        # 单选
+        single_count = await get_numbers(course, self.qt.SingleChoice)
+        # 多选
+        multiple_count = await get_numbers(course, self.qt.MultipleChoice)
+        # 单选
+        fill_count = await get_numbers(course, self.qt.Fill)
+        # 单选
+        judge_count = await get_numbers(course, self.qt.Judge)
+        # 单选
+        short_ans_count = await get_numbers(course, self.qt.ShortAnswer)
+
+        return {"total_count": total_count,
+                "single_count": single_count,
+                "multiple_count": multiple_count,
+                "fill_count": fill_count,
+                "judge_count": judge_count,
+                "short_ans_count": short_ans_count}
+
 
 if __name__ == "__main__":
     import asyncio
 
     eg = ExamPaperGenerator("auto_question_bank")
     qt = QuestionType()
-    # aa = asyncio.run(eg.load_question_bank("be375a95-7dd5-4e77-a85b-9ce076afaab7", 5))
-    asyncio.run(qt.get_col())
+    aa = asyncio.run(eg.number_of_questions_available(course="8ff32d08-3d3e-4cdd-bee0-2c1556e12c7f"))
+    # aa = asyncio.run(eg.number_of_questions_available(course="8ff32d08-3d3e-4cdd-bee0-2c1556e12c7f",
+    #                                                   question_type="be375a95-7dd5-4e77-a85b-9ce076afaab7"))
+    # asyncio.run(qt.get_col())
     # asyncio.run(qt.get_question_type_dictionary())
-    aa = asyncio.run(qt.get_question_type("df95a06a-4fe6-4637-9412-85af4b1fee97"))
+    # aa = asyncio.run(qt.get_question_type("df95a06a-4fe6-4637-9412-85af4b1fee97"))
     print(aa)
 
     # question_type = {'fill': 5, 'judge': 5, 'multiple_choice': 5, 'short_answer': 5, 'single_choice': 10}

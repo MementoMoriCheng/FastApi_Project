@@ -6,7 +6,7 @@
 # @Software: PyCharm
 
 
-from typing import Union
+from typing import Union, List
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ class FlyingPlanSchema(BaseModel):
     id: str
     name: str = None
     description: str = None
+    PID: str = None
     route_id: str
     plane_id: str
     coach_id: str
@@ -35,10 +36,11 @@ class FlyingPlanSchema(BaseModel):
 class CreateFlyingPlan(BaseModel):
     name: str = None
     fly_route: dict
-    status: int = 1
     plane: dict
     coach: dict
     student: dict
+    status: int = 1
+    PID: list = None
     handle_user: str = None
     description: str = None
     plane_most_ply: int = None
@@ -80,3 +82,9 @@ class SearchFlyingPlan(BaseModel):
     real_time_end: Union[datetime, None]
     limit: int = 10
     offset: int = 0
+
+
+class SearchFightReplayData(BaseModel):
+    time_start: Union[datetime, None]
+    time_end: Union[datetime, None]
+    identify_code: List[str] = None

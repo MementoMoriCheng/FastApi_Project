@@ -30,18 +30,58 @@ FLIGHT_DATA_TABLE = "gnss_data"
 # 中间表
 INTERMEDIATE_TABLE = "intermediate_table"
 
+# 课程、专业、题型
+COURSE_NAME = "full_name"
+MAJOR_NAME = "n_r__iRnX"
+TYPE_NAME = "n_r__zNrr"
+
 # 飞机信息登记表机号列名
 AIRCRAFT_ID = "j_h__bGYP"
+SHORT_AIRCRAFT_ID = "j_h__fFmZ"
 AIRCRAFT_TYPE = "j_x__CchN"
+# 机型
+AIRCRAFT_TYPE_TABLE = "auto_j_x_d_j_b__ddkz"
+# 飞机信息登记表内容
+FLYABLE_ITEM = "k_f_k_m__JHba"
+NO_FLY_ITEM = "j_f_k_m__Sdzb"
+PLANE_STATUS = "f_j_zh_t__sbwY"
+# 已飞时间
+AIRFRAME_TIME = "j_sh_sh_j__dZMc"
+ENGINE_TIME = "f_d_j_sh_j__tSRE"
+PROPELLER_TIME = "l_x_j_sh_j__BEM_"
+
+# 飞机状态字典
+AIRCRAFT_STATUS = "auto_f_j_zh_t_z_d__zfmb"
+STATUS_NUMBER = "x_h__at_T"
+STATUS_CONTENT = "n_r__krXX"
+# 空域
+AIRSPACE_TABLE = "auto_k_y_x_x_d_j_b__rxsr"
+AIRSPACE_AIRPORT = "j_ch__jRHK"
+AIRSPACE_NUMBER = "x_h__nDCQ"
+AIRSPACE = "k_y__KNS_"
+ADJACENT_AIRSPACE = "x_l_k_y__XXxA"
+
+# 教员表
+PLAN_COACH = "auto_j_y_x_x_b__etdf"
+COACH_NAME_COL = "x_m__QYBH"
+# 航线表
+PLAN_ROUTE = "auto_h_x_g_l__gfxb"
+# 学员表
+PLAN_STUDENT = "auto_x_y_x_x_b__dxtc"
+STUDENT_CODE_NAME = "d_h__PDxr"
+# 飞机表
+PLAN_PLANE = "auto_f_j_x_x_d_j_b__hrwm"
 
 # 网卡名字
 NETWORK_CARD_NAME = ["virtual", "vmware", "vmnet", "vethernet (wsl)"]
 
 # 导出文件信息
 # 题库信息
-# COLUMNS_TO_KEEP = ['QID', 'department', 'major', 'course', 'chapter', 'section', 'type', 'option_number', 'question', 'evaluate_answers', 'answer', 'used_times', 'scored_times', 'remarks', 'score']
 COLUMNS_TO_KEEP = ['QID', 'department', 'major', 'course', 'chapter', 'section', 'type', 'option_number', 'question',
                    'evaluate_answers', 'answer']
+
+# 机载站号对应飞机简号
+station_id_2_plane_id = {"2": "20", "3": "19", "4": "18", "5": "21"}
 
 
 class RecordsStatusCode:
@@ -92,6 +132,38 @@ class QuestionTypeIndex:
 
 
 QUESTION_TYPE_LIST = ['single_choice_num', 'multiple_choice_num', 'fill_num', 'judge_num', 'short_answer_num']
+DEFAULT_EXAMINATION = {
+    "course_1": None,
+    "course_2": None,
+    "course_3": None,
+    "course_4": None,
+    "course_5": None,
+    "course_6": None,
+    "course_7": None,
+    "course_8": None,
+    "course_9": None,
+    "course_10": None,
+    "ratio_1": None,
+    "ratio_2": None,
+    "ratio_3": None,
+    "ratio_4": None,
+    "ratio_5": None,
+    "ratio_6": None,
+    "ratio_7": None,
+    "ratio_8": None,
+    "ratio_9": None,
+    "ratio_10": None,
+    "single_choice_num": None,
+    "multiple_choice_num": None,
+    "fill_num": None,
+    "judge_num": None,
+    "short_answer_num": None,
+    "single_choice_score": None,
+    "multiple_choice_score": None,
+    "fill_score": None,
+    "judge_score": None,
+    "short_answer_score": None
+}
 
 # 数据库记录日志格式
 LOG_RECORDS = {
@@ -133,6 +205,7 @@ GNSS_RECORDS = {
     'pitch': '俯仰角',
     'checksum': '校验和',
     'update_time': "时间",
+    'flight_time': "飞机飞行时间",
     'is_delete': "是否删除, 1：删除、0：保留，默认值：0"
 }
 
@@ -195,6 +268,7 @@ FLIGHT_ALARM = {
 
 # 制定飞行计划参数字典
 FLIGHT_PLAN_PARAMETER = {
+    "PID": "",
     "route_ids": "",
     "plane_ids": "",
     "coach_ids": "",

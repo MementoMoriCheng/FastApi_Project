@@ -103,8 +103,13 @@ def generate_service_token():
 
 
 async def fetch_external_data(url: str, data):
+    json_data = []
     async with httpx.AsyncClient() as client:
-        json_data = [item if isinstance(item, str) else item.dict() for item in data]
+        for item in data:
+            if isinstance(item, str) or isinstance(item, dict):
+                json_data.append(item)
+            else:
+                json_data.append(item.dict())
         response = await client.post(url, headers={"Authorization": f"Bearer {generate_service_token()}"},
                                      json=json_data)
         if response.status_code == 200:
@@ -126,3 +131,20 @@ async def fetch_external_upload_file(url: str, file_path, user_id=None, extra_da
                 return response.json()
             else:
                 return {"error": "Failed to fetch external data"}
+
+
+async def fetch_do_restore_file(url: str, user_id=None, _id=None, extra_data=None):
+    async with httpx.AsyncClient() as client:
+        send_data = {
+            "description": extra_data,
+            "id": _id,
+            "user_id": user_id,
+        }
+        response = await client.post(
+            headers={"Authorization": f"Bearer {generate_service_token()}"},
+            url=url, json=send_data, timeout=None
+        )
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": "Failed to fetch external data"}

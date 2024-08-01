@@ -4,25 +4,30 @@
 # @Author  : yilifeng
 # @File    : sql_handle.py
 # @Software: PyCharm
+import copy
 import json
 from typing import List
 from datetime import datetime
 from src.db.dals import ExecDAL
-from src.utils import generate_uuid
 from src.config.setting import settings
-from src.utils.tools import filter_dict
 from sqlalchemy.exc import SQLAlchemyError
+
 from src.utils.sql_config import sql_handle
 from src.utils.dependencies import DALGetter
 from fastapi import APIRouter, Depends, Query
 from src.db.schemas.table_manage import UserSyncIn
-from src.utils.exam_related_tools import CalculateGrade
+from src.utils import generate_uuid, generate_bigint_id
+from src.utils.flight_planning_design import flight_design
 from src.utils.logger import logger, generate_mysql_log_data
+from src.db.schemas.flying_manage import SearchFightReplayData
+from src.utils.tools import filter_dict, parse_select_conditions, filter_list
 from src.db.models import TableManage, ColumnManage, IntermediateTable
+from src.utils.exam_related_tools import CalculateGrade, ExamPaperGenerator
+from src.utils.constant import RESERVE, SON, RecordsStatusCode, QuestionTypeIndex, DEFAULT_EXAMINATION, AIRCRAFT_ID, \
+    FLIGHT_DATA_TABLE, PLAN_COACH, PLAN_STUDENT
 from src.db.schemas.ground_teach import CreatePaperSchema, CalculatePayload, SubmitAnswerSchema
-from src.utils.constant import RESERVE, SON, RecordsStatusCode, QuestionTypeIndex
 from src.utils.middle_level_management import create_fun_dict, get_fun_dict, create_paper_question_info, \
-    get_paper_question_info, create_single_flying_service
+    get_paper_question_info
 from src.utils.responses import resp_200, resp_404, fetch_external_data, resp_400, resp_500
 
 router = APIRouter()
@@ -88,12 +93,6 @@ async def list_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
 async def list_condition_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                               middle_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                               column_dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, code: str, column_info: dict):
-    def gen_select_conditions(column_list, value, operator):
-        select_conditions = dict()
-        for column in column_list:
-            select_conditions[column] = {'value': value, 'operator': operator}
-        return select_conditions
-
     dal.setDb(TableManage)
     logger.debug(f"通过表名获取过滤之后的数据:{code}:{column_info}")
     res = await dal.get_by(code=code)
@@ -110,22 +109,8 @@ async def list_condition_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         if col.association:
             if col.association[0].get("multiple"):
                 multiple_col.append(col.code)
+    select_conditions, limit, offset = parse_select_conditions(column_info)
 
-    select_conditions = dict()
-    columns_list = list()
-    column_list_info = column_info.get("query")
-
-    if column_list_info is not None and len(column_list_info) > 0:
-        for column_info in column_list_info:
-            column_list = column_info.get("key")
-            value = column_info.get("value")
-            operator = column_info.get("operator")
-            conditions = gen_select_conditions(column_list, value, operator)
-            select_conditions.update(conditions)
-            columns_list.extend(column_list)
-
-    limit = column_info.get("limit")
-    offset = column_info.get("offset")
     fields_data = column_res  # [con.code for con in column_res if con.code in columns_list]
     if "id" not in fields_data:
         fields_data.append('id')
@@ -171,9 +156,11 @@ async def create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     table_id = res.id
     col_dal.setDb(ColumnManage)
     col_res = await col_dal.get_by_all(table_id=table_id, is_delete=RESERVE)
-    multiple_col = {}
+    multiple_col, bigint_list = {}, []
     try:
         for col in col_res:
+            if "ID" in col.code:
+                bigint_list.append(col.code)
             if col.association:
                 if col.association[0].get("multiple") and obj_in.get(col.code):
                     multiple_col[col.code] = json.loads(obj_in.get(col.code))
@@ -193,8 +180,8 @@ async def create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
             obj_in.update({key: ""})
     try:
         await middle_dal.create_all(middle_data)
-    except SQLAlchemyError:
-        return resp_400()
+    except SQLAlchemyError as e:
+        return resp_400(msg=f"{e}")
 
     table_name = f"auto_{res.code}"
     obj_in = filter_dict(obj_in)
@@ -202,14 +189,14 @@ async def create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                    'is_delete': RESERVE,
                    'create_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                    'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
-
+    for bigint_id in bigint_list:
+        if not obj_in.get(bigint_id):
+            obj_in.update({bigint_id: generate_bigint_id()})
     # 地面教学,飞行规划相关单独处理
     if table_name in [settings.EXAMINATION, settings.PAPER, settings.ONLINE_LEARNING, settings.TEACHING_RESOURCE,
-                      settings.QUESTION_BANK]:
+                      settings.QUESTION_BANK, settings.FLIGHT_PLAN_BASE, settings.FLIGHT_PLAN_PLANE]:
         calling = create_fun_dict.get(table_name)
         obj_in = await calling(table_name, obj_in)
-        if table_name == settings.EXAMINATION:
-            total_score = obj_in.pop("total_exam_score")
 
     try:
         inserted_data_id = await sql_handle.insert(table_name, obj_in)
@@ -218,6 +205,21 @@ async def create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         return resp_400(msg=f"{e}")
 
     inserted_id = inserted_data_id[0].get("id") if inserted_data_id else obj_in.get("id")
+
+    # 教员、学员自动成为本系统的可登录用户，可使用默认密码登录系统
+    if table_name in [PLAN_COACH, PLAN_STUDENT]:
+        username = obj_in.get("username")
+        password = obj_in.get("login_password") if obj_in.get("login_password") else settings.DEFAULT_PASSWORD
+        role_id = settings.DEFAULT_ROLE_ID
+        system_id = settings.DEFAULT_SYSTEM_ID
+        payload = [{"username": username, "password": password, "role_id": role_id, "system_id": [system_id]}]
+        url = settings.SYNC_USER_URL
+        response_result = await fetch_external_data(url, payload)
+        flag = response_result.get("error")
+        if flag:
+            logger.info(f"同步用户到管理系统失败!:{payload}")
+        else:
+            logger.info(f"同步用户到管理系统成功!:{payload}")
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=code,
                                              handle_user="", handle_params=obj_in,
@@ -253,7 +255,6 @@ async def modify_data_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         if col.association:
             if col.association[0].get("multiple"):
                 multiple_col[col.code] = json.loads(obj_in.get(col.code)) if obj_in.get(col.code) else None
-
     middle_data = []
     middle_dal.setDb(IntermediateTable)
     for key, vals in multiple_col.items():
@@ -268,8 +269,12 @@ async def modify_data_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
 
     try:
         await middle_dal.create_all(middle_data)
-    except SQLAlchemyError:
-        return resp_400()
+    except SQLAlchemyError as e:
+        return resp_400(msg=f"{e}")
+
+    if table_name in [settings.FLIGHT_PLAN_PLANE, settings.PLANE_TABLE]:
+        calling = create_fun_dict.get(table_name)
+        obj_in = await calling(table_name, obj_in)
 
     middle_delete_dal.setDb(IntermediateTable)
     update_conditions = {"id": id_}
@@ -323,7 +328,6 @@ async def batch_modify_data_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
             if col.association:
                 if col.association[0].get("multiple"):
                     multiple_col[col.code] = json.loads(obj_in.get(col.code)) if obj_in.get(col.code) else None
-
         for key, vals in multiple_col.items():
             correlation_id = generate_uuid()
             obj_in.update({key: correlation_id})
@@ -333,6 +337,10 @@ async def batch_modify_data_by_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                         middle_data.append({"correlation_id": correlation_id, "data_id": val, "id": generate_uuid()})
             else:
                 middle_data.append({"correlation_id": correlation_id, "data_id": "", "id": generate_uuid()})
+
+        if table_name in [settings.FLIGHT_PLAN_PLANE, settings.PLANE_TABLE]:
+            calling = create_fun_dict.get(table_name)
+            obj_in = await calling(table_name, obj_in)
 
         middle_delete_dal.setDb(IntermediateTable)
         update_conditions = {"id": id_}
@@ -378,11 +386,13 @@ async def batch_create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecD
     col_dal.setDb(ColumnManage)
     col_res = await col_dal.get_by_all(table_id=table_id, is_delete=RESERVE)
     table_name = f"auto_{res.code}"
-    create_data_list, middle_data = [], []
+    create_data_list, middle_data, sync_user_payload = [], [], []
     for obj_in in payload:
-        multiple_col = {}
+        multiple_col, bigint_list = {}, []
         try:
             for col in col_res:
+                if "ID" in col.code:
+                    bigint_list.append(col.code)
                 if col.association:
                     if col.association[0].get("multiple") and obj_in.get(col.code):
                         multiple_col[col.code] = json.loads(obj_in.get(col.code))
@@ -405,7 +415,9 @@ async def batch_create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecD
                        'is_delete': RESERVE,
                        'create_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                        'update_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
-
+        for bigint_id in bigint_list:
+            if not obj_in.get(bigint_id):
+                obj_in.update({bigint_id: generate_bigint_id()})
         # 地面教学,飞行规划相关单独处理
         if table_name in [settings.EXAMINATION, settings.PAPER, settings.ONLINE_LEARNING, settings.TEACHING_RESOURCE,
                           settings.QUESTION_BANK]:
@@ -418,12 +430,28 @@ async def batch_create_data_by_table_name(dal: ExecDAL = Depends(DALGetter(ExecD
                                                  entity_id=obj_in.get("id"), handle_reason='通过表名创建一条数据')
         await sql_handle.add_records("log_manage", mysql_log_data)
 
+        # 教员、学员自动成为本系统的可登录用户，可使用默认密码登录系统
+        if table_name in [PLAN_COACH, PLAN_STUDENT]:
+            username = obj_in.get("username")
+            password = obj_in.get("login_password") if obj_in.get("login_password") else settings.DEFAULT_PASSWORD
+            role_id = settings.DEFAULT_ROLE_ID
+            system_id = settings.DEFAULT_SYSTEM_ID
+            sync_user_payload.append(
+                {"username": username, "password": password, "role_id": role_id, "system_id": [system_id]})
+
     try:
         await middle_dal.create_all(middle_data)
         await sql_handle.batch_insert(table_name, create_data_list)
+
+        url = settings.SYNC_USER_URL
+        response_result = await fetch_external_data(url, sync_user_payload)
+        flag = response_result.get("error")
+        if flag:
+            logger.info(f"同步用户到管理系统失败!:{payload}")
+        else:
+            logger.info(f"同步用户到管理系统成功!:{payload}")
     except SQLAlchemyError as err:
         return resp_400(msg=f"{err}")
-
     return resp_200()
 
 
@@ -489,23 +517,32 @@ async def unsync_user(*, usernames: List[str]):
     return response_result
 
 
+@router.get('/number_of_questions_available/', tags=['SqlHandle'], summary="获取课程/题目类型可用题数")
+async def unsync_user(course: str = None):
+    exam_paper = ExamPaperGenerator(settings.QUESTION_BANK)
+    detail_count = await exam_paper.number_of_questions_available(course)
+    return resp_200(data=detail_count)
+
+
 @router.post("/create_paper/", tags=["SqlHandle"], summary="创建试卷")
 async def create_paper(create_paper_question: CreatePaperSchema):
     # 获取试卷信息
-    paper_condition = {"id": create_paper_question.paper_id}
-    pi_res = await sql_handle.select("auto_paper_info", paper_condition, fields=["PIID", "EID"])
-    if not pi_res:
-        return resp_200(data=[])
-    pid, eid = pi_res[0].get("PIID"), pi_res[0].get("EID")
+    calling = create_fun_dict.get(settings.PAPER)
+    obj_in = await calling(settings.PAPER, create_paper_question)
+
+    pid, eid = obj_in.get("PIID"), obj_in.get("EID")
     # 获取考试信息
     exam_condition = {"EID": eid}
     e_res = await sql_handle.select("auto_examination", exam_condition)
     if not e_res:
         return resp_200(data=[])
 
-    e_related_course = e_res[0]
+    e_related_course, bak_data = e_res[0], copy.deepcopy(e_res[0])
     res, create_paper_dict = await create_paper_question_info("auto_exam_result_detail", pid, e_related_course)
     if not res:
+        await sql_handle.delete(settings.PAPER, {"PIID": pid})
+        bak_data.update(**DEFAULT_EXAMINATION)
+        await sql_handle.update(settings.EXAMINATION, {"EID": eid}, bak_data)
         return resp_400(msg='创建失败')
     paper_question_res = await get_paper_question_info("auto_exam_result_detail", pid)
     if not paper_question_res:
@@ -526,12 +563,17 @@ async def submit_answer(submit_answer_info: SubmitAnswerSchema):
         return resp_200(data=[])
     exam_info = e_res[0]
     eid = exam_info.get("EID")
-    # 获取试卷信息
+    # 试卷信息
     paper_condition = {"EID": eid}
-    pi_res = await sql_handle.select("auto_paper_info", paper_condition, fields=["PIID"])
+    pi_res = await sql_handle.select("auto_paper_info", paper_condition)
     if not pi_res:
         return resp_200(data=[])
-    pid = pi_res[0].get("PIID")
+    paper_dict = copy.deepcopy(pi_res[0])
+    paper_dict.update(id=generate_uuid(), EID=eid, UID=submit_answer_info.UID, PID=generate_bigint_id(),
+                      PIID=generate_bigint_id())
+    await sql_handle.insert("auto_paper_info", paper_dict)
+
+    pid, new_pid = pi_res[0].get("PIID"), paper_dict.get("PIID")
     # 获取试卷详情信息
     er_condition = {"PID": pid, "QID": submit_answer_info.QID}
     er_res = await sql_handle.select("auto_exam_result_detail", er_condition)
@@ -540,7 +582,8 @@ async def submit_answer(submit_answer_info: SubmitAnswerSchema):
 
     e_related_course = er_res[0]
     e_related_course["solution"] = submit_answer_info.solution
-    await sql_handle.update("auto_exam_result_detail", er_condition, e_related_course)
+    e_related_course.update(ERID=generate_bigint_id(), PID=new_pid, id=generate_bigint_id())
+    await sql_handle.insert("auto_exam_result_detail", e_related_course)
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type='auto_exam_result_detail',
                                              handle_user='', handle_params=submit_answer_info.dict(),
                                              entity_id='', handle_reason='交卷')
@@ -621,6 +664,7 @@ async def cal_grade(payload: CalculatePayload):
 
 @router.post('/search/{code}', tags=['SqlHandle'], summary="搜索表中的数据")
 async def search_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
+                      middle_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                       column_dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, code: str, payload: dict):
     key_word = payload.get('key_word')
     dal.setDb(TableManage)
@@ -633,12 +677,53 @@ async def search_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     column_res = await column_dal.get_by_all(table_id=res.id, is_delete=RESERVE, is_parent=[SON, None])
     if not column_res:
         return resp_200(data=column_res)
+
+    multiple_col = []
+    for col in column_res:
+        if col.association:
+            if col.association[0].get("multiple"):
+                multiple_col.append(col.code)
+
     table_name = f"auto_{res.code}"
-    if not key_word:
-        data = await sql_handle.select(table_name, fields=column_res)
-        return resp_200(data={"data": data, "total": len(data)})
-    table_list, hash_id = [], set()
+    if not key_word and table_name in [settings.TEACHING_RESOURCE, settings.QUESTION_BANK]:
+        search_condition, resource_chapter, resource_section, resource_dict = {}, set(), set(), {}
+        for key, value in payload.items():
+            search_condition[key] = {'operator': 'includes', 'value': value}
+        data = await sql_handle.select(table_name, conditions=search_condition, fields=column_res)
+        for con in data:
+            resource_chapter.add(con.get("chapter"))
+            resource_section.add(con.get("section"))
+        resource_dict.update(chapter=filter_list(resource_chapter), section=filter_list(resource_section))
+        return resp_200(data=resource_dict)
+    elif not key_word and table_name in [settings.PLANE_TABLE]:
+        plane_set, plane_date, plane_dict, unique = set(), set(), {}, True
+        data = await sql_handle.select(table_name, conditions=payload, fields=column_res)
+        if data and len(data) > 0:
+            unique = False
+        plane_dict.update(unique=unique)
+        for con in data:
+            plane_set.add(con.get(AIRCRAFT_ID))
+        for plane in plane_set:
+            gnss_date = await sql_handle.select("gnss_data", conditions={"identify_code": plane},
+                                                fields=["flight_time"])
+            for date_data in gnss_date:
+                time_con = date_data.get("flight_time")
+                if not time_con:
+                    continue
+                plane_date.add(time_con.date())
+            plane_dict[plane] = plane_date
+        return resp_200(data=plane_dict)
+    elif not key_word:
+        unique = True
+        data = await sql_handle.select(table_name, conditions=payload, fields=column_res)
+        if data and len(data) > 0:
+            unique = False
+        return resp_200(data={"unique": unique})
+    table_list, hash_id, association_list, association_cols = [], set(), [], []
     for column_info in column_res:
+        if column_info.association:
+            association_list.extend(column_info.association)
+            association_cols.append(column_info.code)
         conditions = {column_info.code: {"value": key_word, "operator": "includes"}}
         condition_res = await sql_handle.select(table_name, conditions=conditions, fields=column_res)
         for condition_info in condition_res:
@@ -647,16 +732,70 @@ async def search_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
             else:
                 hash_id.add(condition_info.get("id"))
                 table_list.append(condition_info)
+    middle_dal.setDb(IntermediateTable)
+    association_res_list = []
+    for association in association_list:
+        association_conditions = {association["tableCol"]: {"value": key_word, "operator": "includes"}}
+        association_res = await sql_handle.select(f"auto_{association['tableCode']}", conditions=association_conditions)
+        if association_res:
+            middle_dal_res = await middle_dal.get_by_all(data_id=association_res[0].get("id"))
+            association_res_list.extend([con.correlation_id for con in middle_dal_res])
+            association_res_list.append(association_res[0].get("id"))
+    for association_id in association_res_list:
+        for association_col in association_cols:
+            conditions = {association_col: {"value": association_id, "operator": "includes"}}
+            condition_res = await sql_handle.select(table_name, conditions=conditions, fields=column_res)
+            for condition_info in condition_res:
+                if condition_info.get("id") in hash_id:
+                    continue
+                else:
+                    hash_id.add(condition_info.get("id"))
+                    table_list.append(condition_info)
+    for table_info in table_list:
+        data_ids = []
+        for con in multiple_col:
+            middle_dal_res = await middle_dal.get_by_all(correlation_id=table_info.get(con))
+            if middle_dal_res is not None:
+                for middle_res in middle_dal_res:
+                    data_ids.append(middle_res.data_id)
+            table_info[con] = json.dumps(data_ids)
     return resp_200(data={"data": table_list, "total": len(table_list)})
 
 
-@router.post('/flight_algorith_design/', tags=['SqlHandle'], summary="创建一条飞行计划")
-async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, code: str, input_data: dict):
-    plan_data = await create_single_flying_service(dal, input_data)
-    try:
-        table_name = f"auto_{code}"
-        insert_id = await sql_handle.insert(table_name, plan_data)
-    except SQLAlchemyError as e:
-        logger.error(e)
-        return resp_400(msg=f"{e}")
-    return resp_200(data=insert_id)
+@router.post('/search_fight_replay_data/', tags=['SqlHandle'], summary="搜索飞行表中的数据")
+async def search_fight_replay_data(*, payload: SearchFightReplayData):
+    select_condition = {"is_delete": RESERVE}
+    gnss_fields = settings.GNSS_FIELDS.split(',')
+    plane_set, plane_dict = set(), {}
+
+    if payload.identify_code:
+        for id_ in payload.identify_code:
+            select_condition["identify_code"] = id_
+            select_condition["flight_time"] = {"value": (payload.time_start, payload.time_end), "operator": "between"}
+            data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition,
+                                                fields=gnss_fields,
+                                                order_by={"gps_milliseconds": False})
+            plane_dict[id_] = data_info
+        return resp_200(data=plane_dict)
+
+    if payload.time_start and payload.time_end:
+        select_condition["flight_time"] = {"value": (payload.time_start, payload.time_end), "operator": "between"}
+        data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition,
+                                            fields=gnss_fields,
+                                            order_by={"gps_milliseconds": False})
+        for plane in data_info:
+            plane_set.add(plane.get("identify_code"))
+        return resp_200(data=plane_set)
+
+
+@router.post('/search_flight_params/', tags=['SqlHandle'], summary="教员,学员,飞机,航线信息")
+async def search_flight_params(input_data: List[dict]):
+    plan_parameters = []
+    for param in input_data:
+        if not input_data:
+            plan_parameters.append({})
+        plan_parameter, _, _, _ = await flight_design.plan_parameter_setting_collect(param)
+        if not plan_parameter:
+            return resp_200(data=[])
+        plan_parameters.append(copy.deepcopy(plan_parameter))
+    return resp_200(data=plan_parameters)

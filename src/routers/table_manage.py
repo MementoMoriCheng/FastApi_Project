@@ -5,16 +5,17 @@
 # @File    : column_manage.py
 # @Software: PyCharm
 
-from fastapi import APIRouter, Depends, Query
 from src.db.dals import ExecDAL
-from src.utils.logger import logger, generate_mysql_log_data
-from src.utils.responses import resp_200, resp_404, resp_500, resp_403
-from src.utils.dependencies import DALGetter
-from src.db.models import TableManage
-from src.db.schemas.table_manage import CreateTableManage, UpdateTableManage, TableManageSchema
-from src.utils.sql_config import sql_handle
 from src.static import table_schema
+from src.db.models import TableManage
+from sqlalchemy.exc import SQLAlchemyError
+from src.utils.sql_config import sql_handle
+from src.utils.dependencies import DALGetter
+from fastapi import APIRouter, Depends, Query
+from src.utils.logger import logger, generate_mysql_log_data
 from src.utils.constant import DELETE, RESERVE, RecordsStatusCode
+from src.utils.responses import resp_200, resp_404, resp_500, resp_403, resp_400
+from src.db.schemas.table_manage import CreateTableManage, UpdateTableManage, TableManageSchema
 
 router = APIRouter()
 
@@ -66,10 +67,14 @@ async def create_table(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, obj_in: Cr
     table_name = f"auto_{obj_in.code}"
     columns_config = {key: table_schema[key] for key in obj_in.dict() if key in table_schema}
     sql_handle.create_dynamic_table_core(table_name, columns_config)
-
-    res = await dal.create(obj_in)
-    if not res:
-        return resp_404()
+    try:
+        res = await dal.create(obj_in)
+        if not res:
+            sql_handle.drop_table(table_name)
+            return resp_400()
+    except SQLAlchemyError as e:
+        sql_handle.drop_table(table_name)
+        return resp_400(msg=f"{e}")
 
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=obj_in.code,
                                              handle_user=obj_in.create_user, handle_params=obj_in.dict(),

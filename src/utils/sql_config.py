@@ -95,6 +95,13 @@ class SqlHandle(object):
             primary_key_columns = result.fetchall()
             return primary_key_columns
 
+    async def get_unique_dates(self, table_name):
+        get_unique_dates_sql = f"""SELECT DISTINCT DATE(flight_time) FROM '{table_name}';"""
+        async with self.async_session_factory() as session_exc:
+            result = await session_exc.execute(get_unique_dates_sql)
+            unique_dates = result.fetchall()
+            return unique_dates
+
     async def get_table_columns(self, table_name):
         result = {}
         table = self._get_table(table_name)
@@ -303,6 +310,32 @@ class SqlHandle(object):
         except Exception as e:
             logger.error(f"An error: {str(e)} occurred while processing the table structure")
             return
+
+    def drop_table(self, table_name):
+        """
+        删除表
+        Args:
+            table_name:
+
+        Returns:
+
+        """
+        try:
+            # Get the table object
+            table = Table(table_name, self.metadata, autoload_with=self.engine)
+
+            # Check if the table exists before attempting to drop it
+            inspector = inspect(self.engine)
+            if not inspector.has_table(table_name):
+                logger.warning(f"Table '{table_name}' does not exist.")
+                return False
+
+            table.drop(self.engine)
+            logger.info(f"Table '{table_name}' dropped successfully.")
+            return True
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to drop table '{table_name}': {str(e)}")
+            return False
 
     @staticmethod
     def gen_columns_type(columns, types):

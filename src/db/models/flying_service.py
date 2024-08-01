@@ -17,6 +17,7 @@ class FlyingService(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     name = Column(String(64), comment="安排的计划名")
+    PID = Column(String(36), comment="计划id")
     route_id = Column(String(36), nullable=False, comment="航线id")
     plane_id = Column(String(36), nullable=False, comment="飞机id")
     coach_id = Column(String(36), nullable=False, comment="教员id")

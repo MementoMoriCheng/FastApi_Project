@@ -17,6 +17,7 @@ from src.utils.constant import DELETE, RESERVE, RecordsStatusCode, COLUMN_LENGTH
 from src.db.schemas.column_manage import (
     CreateColumnManage, ColumnManageSchema, UpdateColumnManage, ColumnListSchema, SortColumnManage
 )
+from src.utils.tools import lower_table_code
 
 router = APIRouter()
 
@@ -34,7 +35,6 @@ async def list_columns(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     if not res:
         return resp_200(data=[])
     data = [ColumnListSchema.from_orm(ms) for ms in res]
-
     return resp_200(data=data)
 
 
@@ -71,6 +71,7 @@ async def create_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         return resp_404()
 
     table_code = f"auto_{table_res.code}"
+    obj_in.association = lower_table_code(obj_in.association)
     if not obj_in.is_parent:
         try:
             obj_in.save_length = obj_in.field_length
@@ -146,7 +147,7 @@ async def update_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     table_res = await table_dal.get(ms.table_id)
     if not table_res:
         return resp_404()
-
+    obj_in.association = lower_table_code(obj_in.association)
     res = await dal.update(id_, obj_in)
     mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.INFO, entity_type=table_res.code,
                                              handle_user=obj_in.update_user, handle_params=obj_in.dict(),

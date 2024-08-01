@@ -19,7 +19,8 @@ class GenerateFile:
     def __init__(self):
         pass
 
-    def generate_xml_from_query(self, table_list, output_path=None, file_name=None):
+    @staticmethod
+    def generate_xml(table_list, output_path=None, file_name=None):
         """
         生成xml
         Args:
@@ -30,6 +31,7 @@ class GenerateFile:
         Returns:
 
         """
+        table_name = file_name.split(".")[0]
         root = ET.Element("root")
         for row in table_list:
             record = ET.SubElement(root, "record")
@@ -39,36 +41,57 @@ class GenerateFile:
                 field_element.text = str(field_value)
 
         xml_data = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
-        output_filename = os.path.join(output_path, file_name)
+        output_filename = os.path.join(output_path, table_name)
         # 写入到文件（可选）
-        with open(f"{output_filename}.xml", "w") as xml_file:
+        with open(output_filename, "w") as xml_file:
             xml_file.write(xml_data)
 
-        return xml_data
+        return output_filename
 
-    def generate_excel(self, table_list, output_path=None, file_name=None):
+    @staticmethod
+    def generate_excel(table_list, zh_name=None, col_name=None, output_path=None, file_name=None):
         """
         生成excel
         Args:
             table_list: 从数据库查询得到的数据
-            output_path:
-            file_name:
-
+            col_name: 列名列表
+            output_path: 输出路径
+            file_name: 文件名
+            zh_name: 文件名
         Returns:
-
+            输出文件的完整路径
         """
         table_name = file_name.split(".")[0]
-        if table_name == settings.QUESTION_BANK:
+
+        # 使用col_name作为列名创建DataFrame
+        if col_name:
+            if table_list and isinstance(table_list[0], dict):
+                # 如果table_list是字典列表，则转换为DataFrame并使用col_name作为列名
+                df = pd.DataFrame(table_list)
+                df.columns = col_name
+            else:
+                # 如果table_list是其他类型，创建一个空的DataFrame并使用col_name作为列名
+                df = pd.DataFrame(columns=col_name)
+        elif table_name == settings.QUESTION_BANK:
             df = pd.DataFrame(table_list)[COLUMNS_TO_KEEP]
         else:
             df = pd.DataFrame(table_list)
+
+        # 创建Workbook并添加Sheet
         wb = Workbook()
-        wb.active = wb.create_sheet(title="Sheet1")
-        wb.active.append(df.columns.tolist())
+        ws = wb.active
+        ws.title = "Sheet1"
+
+        # 添加列名到工作表
+        ws.append(col_name)
+
+        # 添加数据行到工作表
         for row in df.itertuples(index=False):
-            wb.active.append(row)
-        output_filename = os.path.join(output_path, file_name)
+            ws.append(list(row))
+        # 保存文件
+        output_filename = os.path.join(output_path, zh_name)
         wb.save(output_filename)
+        return output_filename
 
     @staticmethod
     def max_column_width(data, column_index):
@@ -83,19 +106,18 @@ class GenerateFile:
         """
         return max([len(str(row[column_index])) for row in data])
 
-    def generate_pdf(self, table_list, output_path=None, file_name=None):
+    def generate_pdf(self, table_list, zh_name=None, output_path=None, file_name=None):
         """
         生成pdf
         Args:
             table_list: 从数据库查询得到的数据
             output_path:
             file_name:
+            zh_name:
 
         Returns:
 
         """
-        # pdf = FPDF()
-        # PAGE_WIDTH = 190  # 单位毫米，此处仅为示例，实际值应为扣除页边距后的宽度
         pdf = FPDF("L")
         page_width = 270  # 单位毫米，此处仅为示例，实际值应为扣除页边距后的宽度
 
@@ -105,26 +127,30 @@ class GenerateFile:
         pdf.add_font('simfang', '', simfang_path, uni=True)
         pdf.set_font('simfang', '', 14)
 
+        table_name = file_name.split(".")[0]
         column_titles = list(table_list[0].keys())
         user_data = [list(row.values()) for row in table_list]
-
-        # 计算每列的最大宽度
-        max_widths = [self.max_column_width(user_data, i) for i in range(len(column_titles))]
-
-        column_widths = [int(page_width * w / sum(max_widths)) for w in max_widths]
-        # 将数据写入PDF
-        for i, (title, width) in enumerate(zip(column_titles, column_widths)):
-            pdf.cell(width, 10, txt=title, border=1, align='C' if i == 0 else 'L', ln=(i == len(table_list[0]) - 1))
-        for record in user_data:
-            for col_idx, (value, width) in enumerate(zip(record, column_widths)):
-                pdf.cell(width, 10, txt=str(value), border=1, ln=(col_idx == len(record) - 1),
-                         align='C' if col_idx == 0 else 'L')
+        if table_name == settings.QUESTION_BANK:
+            for idx, data in enumerate(user_data):
+                question, answer = data[16], data[17]
+                con = str(idx + 1) + ". " + question.strip()
+                pdf.multi_cell(0, 10, txt=con)
+        else:
+            # 计算每列的最大宽度
+            max_widths = [self.max_column_width(user_data, i) for i in range(len(column_titles))]
+            column_widths = [int(page_width * w / sum(max_widths)) for w in max_widths]
+            # 将数据写入PDF
+            for i, (title, width) in enumerate(zip(column_titles, column_widths)):
+                pdf.cell(width, 10, txt=title, border=1, align='C' if i == 0 else 'L', ln=(i == len(table_list[0]) - 1))
+            for record in user_data:
+                for col_idx, (value, width) in enumerate(zip(record, column_widths)):
+                    pdf.cell(width, 10, txt=str(value), border=1, ln=(col_idx == len(record) - 1),
+                             align='C' if col_idx == 0 else 'L')
 
         # 指定要保存的路径
-        output_filename = os.path.join(output_path, file_name)
-        # output_path = "E:\\LOCAL_DOWNLOAD_FILE_PATH\\file.pdf"
-        os.makedirs(os.path.dirname(output_filename), exist_ok=True)
-        pdf.output(output_path)
+        output_filename = os.path.join(output_path, zh_name)
+        pdf.output(output_filename)
+        return output_filename
 
 
 class Plotter:
@@ -177,7 +203,7 @@ generate_file = GenerateFile()
 # plotter = Plotter()
 
 # if __name__ == '__main__':
-# generate_xml_from_query()
+# generate_xml()
 # plotter = Plotter()
 # # 示例数据
 # x = range(10)

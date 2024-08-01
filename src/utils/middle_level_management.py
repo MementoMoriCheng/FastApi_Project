@@ -4,20 +4,217 @@
 # @Author  :
 # @File    :
 # @Software: PyCharm
-import asyncio
 import copy
-import datetime
-from datetime import timedelta
+import random
+import asyncio
+import itertools
+import pandas as pd
+from src.utils.logger import logger
 from src.config.setting import settings
-from src.db.models import FlyingService
+from datetime import timedelta, datetime
 from src.utils.responses import resp_200
+from sqlalchemy.exc import SQLAlchemyError
 from src.utils.sql_config import sql_handle
+from src.utils.analyzing_data_tools import ExcelParser
 from src.utils import generate_uuid, generate_bigint_id
-from src.db.schemas.flying_manage import CreateFlyingPlan
-from src.utils.exam_related_tools import ExamPaperGenerator
-from src.utils.logger import logger, generate_mysql_log_data
-from src.utils.constant import RESERVE, QUESTION_TYPE_LIST, RecordsStatusCode
+from src.db.models import FlyingService, IntermediateTable
+from src.utils.flight_evaluation_related_tools import calculator
+from src.utils.exam_related_tools import ExamPaperGenerator, cal_grade_percentage
 from src.utils.flight_planning_design import gen_schedule, flight_design, check_time
+from src.utils.tools import list2dict_2, jaccard_similarity, calculate_time_difference, filter_dict, filter_list, \
+    list2dict
+from src.utils.constant import (RESERVE, QUESTION_TYPE_LIST, AIRCRAFT_TYPE, AIRCRAFT_TYPE_TABLE, AIRFRAME_TIME,
+                                ENGINE_TIME, PROPELLER_TIME)
+
+
+# -----------------------------------------------导入\导出模板信息
+def export_table_template(source_info):
+    """
+    生成表模板信息
+    Args:
+        source_info:
+
+    Returns:
+
+    """
+    table_col_list, association_list = [], []
+    for source in source_info:
+        if source.association:
+            association_list.append({source.code: source.association[0]})
+        table_col_list.append(source.name)
+    return table_col_list, association_list
+
+
+async def convert_id2content(associations):
+    """
+    id转换为具体内容
+    Args:
+        association:
+
+    Returns:
+
+    """
+    associations_list = []
+    for association in associations:
+        col_code, col_infos = list(association.keys())[0], list(association.values())[0]
+        multiple_flag, table_code, table_col = (col_infos.get("multiple"), col_infos.get("tableCode"),
+                                                col_infos.get("tableCol"))
+        table_name = f"auto_{table_code}"
+        col_info = await sql_handle.select(table_name, fields=["id", table_col])
+        col_dict = list2dict(col_info)
+        if multiple_flag:
+            associations_list.append({f"multiple_{col_code}": col_dict})
+        else:
+            associations_list.append({col_code: col_dict})
+    return associations_list
+
+
+async def import_waypoint_route(table_name, data_info, middle_dal):
+    """
+    导入航线信息
+    Args:
+        table_name:
+        data_info:
+        middle_dal:
+
+    Returns:
+
+    """
+    route_dict, middle_data = {}, []
+    exist_route = await sql_handle.select(table_name)
+    route_length = len(exist_route)
+    try:
+        sorted_data = sorted(data_info, key=lambda x: x['sequence_number'])
+        route_dict["airport"] = sorted_data[0].get("airport")
+        route_dict["start_point"] = sorted_data[0].get("id")
+        route_dict["end_point"] = sorted_data[-1].get("id")
+        route_dict["sequence_number"] = route_length + 1
+        route_dict["air_route"] = f"航线_{route_length + 1}"
+        route_dict["id"] = generate_uuid()
+        route_dict["update_time"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        correlation_id = generate_uuid()
+        route_dict["all_point"] = correlation_id
+        for idx, data_dict in enumerate(sorted_data):
+            if idx == 0 or idx == len(sorted_data) - 1:
+                continue
+
+            middle_data.append(
+                {"correlation_id": correlation_id, "data_id": sorted_data[idx].get("id"), "id": generate_uuid()})
+        middle_dal.setDb(IntermediateTable)
+        await middle_dal.create_all(middle_data)
+        insert_id = await sql_handle.insert(table_name, route_dict)
+    except (KeyError, ValueError, SQLAlchemyError) as e:
+        logger.error(e)
+        return None
+    return insert_id
+
+
+async def import_table_template(table_name, full_file_path, col_items, associations, middle_dal):
+    """
+    通过excel导入模板信息
+    Args:
+        table_name:
+        full_file_path:
+        col_items:
+        associations: 关联关系
+        middle_dal:
+
+    Returns:
+
+    """
+
+    parser = ExcelParser(full_file_path)
+    parser.load_data()
+    df = parser.get_dataframe('Sheet1')
+    df = df.rename(columns=col_items)
+    q_list, middle_data = [], []
+    try:
+        for index, row in df.iterrows():
+            q_dict = {k: (v if pd.notnull(v) else None) for k, v in row.items()}
+            for association in associations:
+                for key, value in association.items():
+                    association_table_name, col = f"auto_{value['tableCode']}", value['tableCol']
+                    col_info = await sql_handle.select(association_table_name, fields=["id", col])
+                    col_dict = list2dict_2(col_info)
+                    if value.get("multiple"):
+                        content_list = q_dict[key].split(" ")
+                        correlation_id = generate_uuid()
+                        for content in content_list:
+                            for idx, val in col_dict.items():
+                                similarity = jaccard_similarity(content, idx)
+                                if similarity > 0.9:
+                                    middle_data.append(
+                                        {"correlation_id": correlation_id, "data_id": val, "id": generate_uuid()})
+                                else:
+                                    continue
+                        q_dict.update({key: correlation_id})
+                    else:
+                        for idx, val in col_dict.items():
+                            if not q_dict[key]:
+                                continue
+                            similarity = jaccard_similarity(q_dict[key], idx)
+                            if similarity > 0.9:
+                                q_dict[key] = val
+                            else:
+                                q_dict[key] = None
+            if table_name == settings.QUESTION_BANK:
+                obj_in = await create_question_info(table_name, q_dict)
+            else:
+                q_dict["id"] = generate_uuid()
+                obj_in = q_dict
+            q_list.append(copy.deepcopy(obj_in))
+
+        middle_dal.setDb(IntermediateTable)
+        await middle_dal.create_all(middle_data)
+    except (KeyError, ValueError, SQLAlchemyError) as e:
+        logger.error(e)
+        return q_list
+
+    return q_list
+
+
+# -----------------------------------------------飞机信息
+async def automatically_calculate_flight_time(table_name, source_info):
+    """
+    根据飞参等数据自动计算已飞时间
+    Args:
+        table_name:
+        source_info:
+    Returns:
+
+    """
+    plane_condition = {"aircraft_id": source_info.get("id")}
+    plan_res = await sql_handle.select(settings.FLIGHT_PLAN_CONTENT, conditions=plane_condition)
+    plan_info = plan_res[0]
+    start_datetime, end_datetime = plan_info.get("engine_start"), plan_info.get("parking")
+    seconds, hours, minutes = calculate_time_difference(start_datetime, end_datetime)
+
+
+async def allowed_flight_time(table_name, source_info):
+    """
+    “已飞时间”列为只允许录入一次
+    Args:
+        table_name:
+        source_info:
+
+    Returns:
+
+    """
+    plane_dict = await sql_handle.get_table_columns(table_name)
+    plane_dict.update(**source_info)
+
+    condition = {"id": source_info.get("id")}
+    plane_res = await sql_handle.select(table_name, conditions=condition)
+    plane_info = plane_res[0]
+    airframe_time, engine_time, propeller_time = plane_info.get(AIRFRAME_TIME), plane_info.get(
+        ENGINE_TIME), plane_info.get(PROPELLER_TIME)
+    if airframe_time:
+        plane_dict[AIRFRAME_TIME] = airframe_time
+    if engine_time:
+        plane_dict[ENGINE_TIME] = engine_time
+    if propeller_time:
+        plane_dict[PROPELLER_TIME] = propeller_time
+    return plane_dict
 
 
 # -----------------------------------------------课程/教学资源信息
@@ -40,7 +237,6 @@ async def create_course_source_info(table_name, source_info):
 
 
 # -----------------------------------------------题库信息管理
-
 async def create_question_info(table_name, question_info):
     """
     题库资源内容
@@ -52,8 +248,12 @@ async def create_question_info(table_name, question_info):
 
     """
     question_dict = await sql_handle.get_table_columns(table_name)
-    question_dict.update(QID=generate_bigint_id())
     question_dict.update(**question_info)
+    question_dict.update(QID=generate_bigint_id())
+    question_dict.update(id=generate_uuid())
+    question_dict.update(is_delete=RESERVE)
+    question_dict.update(update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    question_dict.update(create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     return question_dict
 
 
@@ -79,9 +279,9 @@ async def create_online_learning_record_info(table_name, source_info):
     online_learning_dict.update(learning_content=teaching_resource_info.get("course_name"))
     online_learning_dict.update(RID=teaching_resource_info.get("RID"))
     online_learning_dict.update(is_delete=RESERVE)
-    online_learning_dict.update(date=datetime.datetime.now().strftime("%Y-%m-%d"))
-    online_learning_dict.update(create_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    online_learning_dict.update(update_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    online_learning_dict.update(date=datetime.now().strftime("%Y-%m-%d"))
+    online_learning_dict.update(create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    online_learning_dict.update(update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     return online_learning_dict
 
@@ -102,28 +302,6 @@ async def create_exam_info(table_name, exam_info):
         exam_dict = await sql_handle.get_table_columns(table_name)
         exam_dict.update(EID=generate_bigint_id())
         exam_dict.update(**exam_info)
-        single_choice_num = int(exam_info.get("single_choice_num", 0))
-        single_choice_score = int(exam_info.get("single_choice_score", 0))
-        total_single_choice_score = single_choice_score * single_choice_num
-
-        multiple_choice_num = int(exam_info.get("multiple_choice_num", 0))
-        multiple_choice_score = int(exam_info.get("multiple_choice_score", 0))
-        total_multiple_choice_score = multiple_choice_score * multiple_choice_num
-
-        judge_num = int(exam_info.get("judge_num", 0))
-        judge_score = int(exam_info.get("judge_score", 0))
-        total_judge_score = judge_score * judge_num
-
-        fill_num = int(exam_info.get("fill_num", 0))
-        fill_score = int(exam_info.get("fill_score", 0))
-        total_fill_score = fill_score * fill_num
-
-        short_answer_num = int(exam_info.get("short_answer_num", 0))
-        short_answer_score = int(exam_info.get("short_answer_score", 0))
-        total_short_answer_score = short_answer_score * short_answer_num
-
-        total_exam_score = total_single_choice_score + total_multiple_choice_score + total_judge_score + total_fill_score + total_short_answer_score
-        exam_dict.update(total_exam_score=total_exam_score)
         return exam_dict
     except ValueError as err:
         logger.error(err)
@@ -149,12 +327,11 @@ async def get_exam_question_info(code, conditions):
 
         if not e_res:
             return []
-        # random.shuffle(e_res) # 随机打乱
         eid = e_res[0].get("EID")
 
         # 获取试卷信息
         paper_condition = {"EID": eid}
-        pi_res = await sql_handle.select("auto_paper_info", paper_condition, fields=["PIID"])
+        pi_res = await sql_handle.select(settings.PAPER, paper_condition, fields=["PIID"])
         if not pi_res:
             return []
 
@@ -184,10 +361,29 @@ async def create_paper_info(table_name, paper_info):
     """
     try:
         paper_dict = await sql_handle.get_table_columns(table_name)
-        paper_dict.update(UID=generate_bigint_id())
-        paper_dict.update(PID=generate_bigint_id())
-        paper_dict.update(PIID=generate_bigint_id())
-        paper_dict.update(**paper_info)
+        exam_condition = {"id": paper_info.exam_id}
+        examinees_res = await sql_handle.select(settings.EXAMINATION, exam_condition)
+        if not examinees_res:
+            return []
+        exam_res = examinees_res[0]
+        # paper_info
+        eid, start_time, end_time, paper_serial, allow_times = exam_res.get("EID"), exam_res.get(
+            "start_time"), exam_res.get("end_time"), exam_res.get("paper_num"), exam_res.get("allow_times")
+
+        paper_dict.update(id=generate_uuid(), EID=eid, UID=paper_info.UID, PID=generate_bigint_id(),
+                          PIID=generate_bigint_id(), start_time=start_time, end_time=end_time,
+                          paper_serial=paper_serial, date=datetime.now().strftime("%Y-%m-%d"),
+                          update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        await sql_handle.insert(settings.PAPER, paper_dict)
+        # examination
+        exam_dict = paper_info.dict()
+        exam_dict.pop("exam_id")
+        exam_dict.pop("UID")
+        update_data = filter_dict(exam_dict)
+        # TODO 阅卷的时候增加？
+        examinees_num = examinees_res[0].get("examinees_num") if examinees_res[0].get("examinees_num") else 0
+        update_data.update(examinees_num=examinees_num + 1)
+        await sql_handle.update(settings.EXAMINATION, exam_condition, update_data)
         return paper_dict
     except ValueError as err:
         logger.error(err)
@@ -210,6 +406,7 @@ def distribute_course_ratio(course_info, question_type_counts):
         course_ratio_dict[f"course_{i}"] = course_info[f"ratio_{i}"]
     length, counter = len(course_ratio_dict), 0
     for ratio_key, ratio_value in course_ratio_dict.items():
+        ratio_value /= 100
         counter += 1
         if counter < length:
             ratio_counts[course_info[ratio_key]] = {key: int(value * ratio_value) for key, value
@@ -259,7 +456,7 @@ async def create_paper_question_info(table_name, pid, course_info):
     paper_question_dict = await sql_handle.get_table_columns(table_name)
     paper_question_dict.update(PID=pid)
     paper_question_dict.update(reviewed=False)
-    paper_question_dict.update(update_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    paper_question_dict.update(update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     paper_info_list = []
     question_type_counts = {k: v for k, v in course_info.items() if
@@ -270,6 +467,7 @@ async def create_paper_question_info(table_name, pid, course_info):
     exam_paper = ExamPaperGenerator("auto_question_bank")
     for course_id, question_type in course_ratio.items():
         exam_paper_info = await exam_paper.generate_exam(question_type, course_id)
+        exam_paper_info = filter_list(exam_paper_info)
         for idx, question in enumerate(exam_paper_info):
             try:
                 paper_question_dict.update(id=generate_uuid())
@@ -279,7 +477,7 @@ async def create_paper_question_info(table_name, pid, course_info):
                 paper_info_list.append(copy.copy(paper_question_dict))
             except AttributeError as err:
                 logger.error(f"{err}:INFO:{exam_paper_info}:Index:{idx}:Content:{question}")
-                return False
+                return None, None
     await sql_handle.batch_insert(table_name, paper_info_list)
     return paper_info_list, question_type_counts
 
@@ -303,8 +501,9 @@ async def get_paper_question_info(table_name, pid):
         qid_list.append(info["QID"])
         q_a_list.append({"QID": info["QID"], "solution": info["solution"]})
         used_time = await sql_handle.select("auto_question_bank", {"QID": info["QID"]}, fields=["used_times"])
+        used_times = used_time[0]["used_times"] if used_time[0]["used_times"] else 0
         await sql_handle.update("auto_question_bank", {"QID": info["QID"]},
-                                {"used_times": used_time[0]["used_times"] + 1})
+                                {"used_times": used_times + 1})
     question_condition = {"QID": {"value": qid_list, "operator": "in"}}
     question_info_list = await sql_handle.select("auto_question_bank", conditions=question_condition)
     for question_con in question_info_list:
@@ -315,7 +514,114 @@ async def get_paper_question_info(table_name, pid):
     return exam_info
 
 
+# 试卷总体信息
+async def create_exam_result_info(table_name, exam_result_condition):
+    """
+    统计考试成绩信息
+    Args:
+        table_name: auto_exam_result
+        exam_result_condition: {"id":auto_examination.id}
+
+    Returns:
+
+    """
+    try:
+        # 获取考试信息
+        e_res = await sql_handle.select(settings.EXAMINATION, exam_result_condition)
+        if not exam_result_condition:
+            return e_res
+
+        if not e_res:
+            return []
+        exam_info = e_res[0]
+        eid, reference_unit, examinees_num, exam_name = (exam_info.get("EID"), exam_info.get("reference_unit"),
+                                                         exam_info.get("examinees_num"), exam_info.get("exam_name"))
+        # 获取试卷信息
+        paper_condition = {"EID": eid}
+        pi_res = await sql_handle.select(settings.PAPER, paper_condition, fields=["total_score"])
+        score_list = [con.get("total_score") for con in pi_res]
+        score_list.sort(reverse=True)
+        average_score, highest_score, lowest_score = sum(score_list) // len(score_list), score_list[0], score_list[-1]
+
+        ideal_percent, good_percent, pass_percent, flunk_percent = cal_grade_percentage(score_list)
+        exam_result_dict = await sql_handle.get_table_columns(table_name)
+        exam_result_dict.update(id=generate_uuid(), class_name=reference_unit, major=exam_name,
+                                student_num=examinees_num, average_score=average_score, highest_score=highest_score,
+                                lowest_score=lowest_score, ideal_percentage=ideal_percent, good_percentage=good_percent,
+                                pass_percentage=pass_percent, flunk_percentage=flunk_percent)
+        await sql_handle.insert(table_name, exam_result_dict)
+    except ValueError as err:
+        logger.error(err)
+        return []
+
+
 # -----------------------------------------------飞行计划制定
+async def import_flight_route(table_name, full_file_path):
+    """
+    导入已有经纬度数据，直接生成航线轨迹
+    Args:
+        table_name:
+        full_file_path:
+
+    Returns:
+
+    """
+    pass
+
+
+async def create_flight_plan_base(table_name, plan_base_info):
+    """
+    完善飞行计划信息
+    Args:
+        table_name:
+        plan_base_info:
+
+    Returns:
+
+    """
+    try:
+        plan_base_dict = await sql_handle.get_table_columns(table_name)
+        plan_base_dict.update(**plan_base_info)
+        times_today = calculator.get_astral_times()
+        plan_base_dict.update(**times_today)
+        plan_base_dict.update(PID=generate_bigint_id())
+        return plan_base_dict
+    except ValueError as err:
+        logger.error(err)
+        return []
+
+
+async def refine_flight_plane_info(table_name, plane_info):
+    """
+    完善飞行计划中的飞机信息：机型-机号
+    Args:
+        table_name:
+        plane_info:
+
+    Returns:
+
+    """
+    try:
+        plane_info_dict = await sql_handle.get_table_columns(table_name)
+        plane_info_dict.update(**plane_info)
+        air_id_condition = {"id": plane_info["aircraft_id"]}
+        air_id_res = await sql_handle.select(settings.PLANE_TABLE, conditions=air_id_condition)
+        if not air_id_res:
+            return []
+
+        air_type_id = air_id_res[0][AIRCRAFT_TYPE]
+        air_type_condition = {"id": air_type_id}
+        air_type_res = await sql_handle.select(AIRCRAFT_TYPE_TABLE, conditions=air_type_condition)
+        if not air_id_res:
+            return []
+        air_type = air_type_res[0]["id"]
+        plane_info_dict.update(aircraft_type=air_type)
+        return plane_info_dict
+    except ValueError as err:
+        logger.error(err)
+        return []
+
+
 async def get_flight_plan_content_info(code, conditions):
     """
     获取飞行计划内容信息
@@ -347,6 +653,17 @@ async def get_flight_plan_content_info(code, conditions):
         return []
 
 
+def gen_params_ids(cons, selected_info=None):
+    ids_list = []
+    if not selected_info:
+        ids_list.extend([con.get("id") for con in cons])
+    else:
+        for con in cons:
+            if con.get("id") in selected_info:
+                ids_list.append(con.get("id"))
+    return ids_list
+
+
 async def create_single_flying_service(dal, input_data):
     """
     创建一条飞行计划
@@ -357,52 +674,45 @@ async def create_single_flying_service(dal, input_data):
     Returns:
 
     """
-
+    pid = input_data.PID[0]
+    plan_param_condition = {"id": pid}
     # 收集信息
-    plan_parameter, plan_content = await flight_design.plan_parameter_setting_collect(input_data)
+    plan_parameter, plan_content, _, _ = await flight_design.plan_parameter_setting_collect(plan_param_condition)
     if not plan_parameter:
         return []
-    # logger.info(f"创建一条飞行计划:{plan_parameter}")
     try:
-        plane_id = plan_parameter.get("plane_ids")[0]
-        coach_id = plan_parameter.get("coach_ids")[0]
-        student_id = plan_parameter.get("student_ids")[0]
-        route_id = plan_parameter.get("route_ids")[0]
+        plane_id = gen_params_ids(plan_parameter.get("plane_ids"))[0]
+        coach_id = gen_params_ids(plan_parameter.get("coach_ids"))[0]
+        student_id = gen_params_ids(plan_parameter.get("student_ids"))[0]
+        route_id = gen_params_ids(plan_parameter.get("route_ids"))[0]
     except IndexError as err:
         logger.error(err)
         return []
-    start_date = plan_parameter.get("start_time")
-
-    create_plan = CreateFlyingPlan
-    create_plan.name = plan_parameter.get("name")
-    create_plan.description = plan_parameter.get("description")
-    create_plan.start_time = plan_parameter.get("start_time")
-    create_plan.end_time = plan_parameter.get("end_time")
-
-    dal.setDb(FlyingService)
+    start_time_str = input_data.start_time
+    start_date = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S')
     plane_exist_plan = await dal.get_by_all(plane_id=plane_id, is_delete=RESERVE, plan_time_start__gte=start_date)
-    conflict_flag = check_time(plane_exist_plan, create_plan.start_time, create_plan.end_time)
+    conflict_flag = check_time(plane_exist_plan, input_data.start_time, input_data.end_time)
     if conflict_flag:
-        return resp_200(data=[], msg="飞机安排存在冲突")
+        return resp_200(data=[], msg="飞机安排存在冲突"), None
     plane_latest_time = max([plan.real_time_end for plan in plane_exist_plan]) if plane_exist_plan else start_date
 
     coach_exist_plan = await dal.get_by_all(coach_id=coach_id, is_delete=RESERVE, plan_time_start__gte=start_date)
-    conflict_flag = check_time(coach_exist_plan, create_plan.start_time, create_plan.end_time)
+    conflict_flag = check_time(coach_exist_plan, input_data.start_time, input_data.end_time)
     if conflict_flag:
-        return resp_200(data=[], msg="教练安排存在冲突")
+        return resp_200(data=[], msg="教练安排存在冲突"), None
     coach_latest_time = max([coach.real_time_end for coach in coach_exist_plan]) if coach_exist_plan else start_date
 
     student_exist_plan = await dal.get_by_all(student_id=student_id, is_delete=RESERVE, plan_time_start__gte=start_date)
-    conflict_flag = check_time(student_exist_plan, create_plan.start_time, create_plan.end_time)
+    conflict_flag = check_time(student_exist_plan, input_data.start_time, input_data.end_time)
     if conflict_flag:
-        return resp_200(data=[], msg="学生安排存在冲突")
+        return resp_200(data=[], msg="学生安排存在冲突"), None
     student_latest_time = max(
         [student.real_time_end for student in student_exist_plan]) if student_exist_plan else start_date
 
     route_exist_plan = await dal.get_by_all(route_id=route_id, is_delete=RESERVE, plan_time_start__gte=start_date)
-    conflict_flag = check_time(route_exist_plan, create_plan.start_time, create_plan.end_time)
+    conflict_flag = check_time(route_exist_plan, input_data.start_time, input_data.end_time)
     if conflict_flag:
-        return resp_200(data=[], msg="航线安排存在冲突")
+        return resp_200(data=[], msg="航线安排存在冲突"), None
     route_latest_time = max([route.real_time_end for route in route_exist_plan]) if route_exist_plan else start_date
 
     latest_time = max(plane_latest_time, coach_latest_time, student_latest_time, route_latest_time)
@@ -411,122 +721,72 @@ async def create_single_flying_service(dal, input_data):
     available_coach = await dal.get_by_all(coach_id=coach_id, is_delete=RESERVE)
     available_fly_route = await dal.get_by_all(route_id=route_id, is_delete=RESERVE)
     available_student = await dal.get_by_all(student_id=student_id, is_delete=RESERVE)
+    obj_in = input_data.dict()
 
-    # 飞行计划时长
-    # if flight_duration:
-    #     obj_in["plan_duration"] = flight_duration
-    # else:
-    #     name = input_data.fly_route.get('table')
-    #     table_name = f"auto_{name}"
-    #     select_conditions = {"id": route_id}
-    #     flight_duration = await sql_handle.select(table_name, conditions=select_conditions, fields=["flight_duration"])
-    #     if not flight_duration:
-    #         return resp_404(msg=f"未能获取到航线:{route_id}信息")
-    #     obj_in["plan_duration"] = flight_duration[0]["flight_duration"]
+    expand_data = copy.deepcopy(obj_in)
 
-    # flight_interval = plan_parameter.get("flight_interval")
-    # select_conditions = {"id": plane_id}
-    # flight_interval = await sql_handle.select(table_name, conditions=select_conditions, fields=["flight_interval"])
-    # if not flight_interval:
-    #     return resp_404(msg=f"未能获取到飞机:{plane_id}信息")
-    # plan_parameter["flight_interval"] = flight_interval[0]["flight_interval"]
-    # TODO 两架飞机间的放飞间隔时间放飞间隔
-    flight_interval = 15
+    flight_duration = obj_in.get("flight_duration")
+    if flight_duration:
+        obj_in["flight_duration"] = flight_duration
+    else:
+        obj_in["flight_duration"] = list(plan_parameter["flight_duration"].values())[0]
 
-    plan_parameter["flight_interval"] = flight_interval
+    flight_interval = obj_in.get("flight_interval")
+    if not flight_interval:
+        flight_interval = plan_parameter["flight_interval"]
+        obj_in["flight_interval"] = plan_parameter["flight_interval"]
     break_time_length = timedelta(minutes=flight_interval)
-    if latest_time and (latest_time + break_time_length) >= start_date:
-        plan_parameter["start_time"] = (latest_time + break_time_length).strftime("%Y-%m-%d %H:%M:%S")
-    plan_parameter["end_time"] = (plan_parameter.get("end_time")).strftime("%Y-%m-%d %H:%M:%S")
-    expand_data = copy.deepcopy(plan_parameter)
-    plan_info = gen_schedule(plan_parameter, expand_data, available_plane, available_coach, available_fly_route,
+    if latest_time and (latest_time + break_time_length) >= datetime.strptime(obj_in.get("start_time"),
+                                                                              '%Y-%m-%d %H:%M:%S'):
+        obj_in["start_time"] = (latest_time + break_time_length).strftime("%Y-%m-%d %H:%M:%S")
+    plan_info = gen_schedule(obj_in, expand_data, available_plane, available_coach, available_fly_route,
                              available_student)
-
-    await dal.create_all(plan_info)
-    # 写入数据表auto_flight_plan_content
-    plan_content["launch_interval"] = 15
+    # TODO 写入数据表auto_flight_plan_content
     course_source_dict = await create_flight_plan_info(plan_info[0], plan_content)
 
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
-                                             handle_user="", handle_params=plan_parameter,
-                                             entity_id="",
-                                             handle_reason=create_plan.description if create_plan.description else '创建一条飞行计划')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return course_source_dict
+    return plan_info, course_source_dict
 
 
-async def create_batch_flying_service(dal, input_data):
+async def create_batch_flying_service(dal, input_data, obj_in):
     """
     批量创建飞行计划
     Args:
         dal:
-        input_data: {"id":auto_flight_plan_base.id}
-
+        input_data:
+        obj_in:
     Returns:
 
     """
+    selected_plane, selected_coach, selected_student, selected_route = (
+        obj_in.get("plane").get("id"), obj_in.get("coach").get("id"),
+        obj_in.get("student").get("id"), obj_in.get("fly_route").get("id"))
     # 收集信息
-    plan_parameter, plan_content = await flight_design.plan_parameter_setting_collect(input_data)
-    if not plan_parameter:
-        return []
-
-    plane_id = plan_parameter.get("plane_ids")
-    coach_id = plan_parameter.get("coach_ids")
-    student_id = plan_parameter.get("student_ids")
-    route_id = plan_parameter.get("route_ids")
-
     dal.setDb(FlyingService)
-    # logger.info(f"根据信息自动创建飞行计划:{input_data.dict()}")
-    # plane_id = input_data.plane.get("id")
-    # coach_id = input_data.coach.get("id")
-    # student_id = input_data.student.get("id")
-    # route_id = input_data.fly_route.get("id")
+    plane_id = gen_params_ids(input_data.get("plane_ids"), selected_plane)
+    coach_id = gen_params_ids(input_data.get("coach_ids"), selected_coach)
+    student_id = gen_params_ids(input_data.get("student_ids"), selected_student)
+    route_id = gen_params_ids(input_data.get("route_ids"), selected_route)
 
     plan_info_list = []
     route_time_dict = dict()
-    # obj_in = input_data.dict()
-    # expand_data = copy.deepcopy(obj_in)
+    expand_data = copy.deepcopy(obj_in)
 
-    # TODO 飞行计划时长
     duration_list = []
-    # flight_duration = obj_in.get("flight_duration")
-    # if flight_duration:
-    #     obj_in["plan_duration"] = flight_duration
-    #     duration_list.extend([flight_duration for _ in range(len(route_id))])
-    # else:
-    #     name = input_data.fly_route.get('table')
-    #     table_name = f"auto_{name}"
-    #     for id in route_id:
-    #         select_conditions = {"id": id}
-    #         flight_duration = await sql_handle.select(table_name, conditions=select_conditions,
-    #                                                   fields=["flight_duration"])
-    #         if not flight_duration:
-    #             return resp_404(msg=f"未能获取到航线:{id}信息")
-    #         duration_list.append(flight_duration[0]["flight_duration"])
-    # TODO 两架飞机间的放飞间隔时间放飞间隔
+    flight_duration = obj_in.get("flight_duration")
+    if flight_duration:
+        obj_in["plan_duration"] = flight_duration
+        duration_list.extend([flight_duration for _ in range(len(route_id))])
+    else:
+        duration_list.extend(input_data["flight_duration"].values())
     interval_list = []
-    # flight_interval = obj_in.get("flight_interval")
-    # if flight_interval:
-    #     interval_list.extend([flight_interval for _ in range(len(route_id))])
-    # else:
-    #     name = input_data.plane.get('table')
-    #     table_name = f"auto_{name}"
-    #     select_conditions = {"id": plane_id[0]}
-    #     flight_interval = await sql_handle.select(table_name, conditions=select_conditions,
-    #                                               fields=["flight_interval"])
-    #     if not flight_interval:
-    #         return resp_404(msg=f"未能获取到飞机:{plane_id[0]}信息")
-    #     interval_list.extend([flight_interval[0]["flight_interval"] for _ in range(len(route_id))])
+    flight_interval = obj_in.get("flight_interval")
+    if flight_interval:
+        interval_list.extend([flight_interval for _ in range(len(route_id))])
+    else:
+        interval_list.extend([input_data["flight_interval"] for _ in range(len(route_id))])
 
-    start_date = plan_parameter.get("start_time")
-    end_date = plan_parameter.get("end_time")
-
-    create_plan = CreateFlyingPlan
-    create_plan.name = plan_parameter.get("name")
-    create_plan.description = plan_parameter.get("description")
-    create_plan.start_time = plan_parameter.get("start_time")
-    create_plan.end_time = plan_parameter.get("end_time")
+    start_date = input_data.get("start_time")
+    end_date = input_data.get("end_time")
 
     # 查询当天存在的航线安排
     for id in route_id:
@@ -569,13 +829,13 @@ async def create_batch_flying_service(dal, input_data):
         for i in range(n):
             copied_dict = copy.deepcopy(obj_in)
             copied_dict["fly_route"]["id"] = sorted_route_lst[i]
-            copied_dict["plan_duration"] = duration_list[i]
+            copied_dict["flight_duration"] = duration_list[i]
             copied_dict["flight_interval"] = interval_list[i]
             copied_dict["plane"]["id"] = sorted_plane_lst[i]
             copied_dict["coach"]["id"] = sorted_coach_lst[i]
             copied_dict["student"]["id"] = sorted_student_lst[i]
             if route_time_dict[sorted_route_lst[i]] != start_date:
-                break_time_length = timedelta(minutes=flight_interval)
+                break_time_length = timedelta(minutes=interval_list[i])
                 copied_dict["start_time"] = (route_time_dict[sorted_route_lst[i]] + break_time_length).strftime(
                     "%Y-%m-%d %H:%M:%S")
             copies.append(copied_dict)
@@ -678,15 +938,7 @@ async def create_batch_flying_service(dal, input_data):
         random.shuffle(unique_elements)
         conflict_resolution([con], checked_info, unique_elements)
         end_list.append(con)
-    await dal.create_all(end_list)
-
-    mysql_log_data = generate_mysql_log_data(level=RecordsStatusCode.DEBUG, entity_type="flying_service",
-                                             handle_user=input_data.handle_user, handle_params=input_data.dict(),
-                                             entity_id="",
-                                             handle_reason=input_data.description if input_data.description else '根据信息自动创建飞行计划')
-    await sql_handle.add_records("log_manage", mysql_log_data)
-
-    return resp_200(data=end_list, msg="飞行计划已自动创建")
+    return end_list
 
 
 async def create_flight_plan_info(plan_info, plan_content):
@@ -704,8 +956,8 @@ async def create_flight_plan_info(plan_info, plan_content):
     flight_plan_dict.update(PID=plan_content.get("PID"))
     flight_plan_dict.update(BID=generate_bigint_id())
     flight_plan_dict.update(is_delete=RESERVE)
-    flight_plan_dict.update(create_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    flight_plan_dict.update(update_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    flight_plan_dict.update(create_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    flight_plan_dict.update(update_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     flight_plan_dict.update(aircraft_id=plan_content.get("aircraft_id"))
     flight_plan_dict.update(aircraft_type=plan_content.get("aircraft_type"))
     flight_plan_dict.update(longitudinal_position=1)
@@ -722,24 +974,28 @@ async def create_flight_plan_info(plan_info, plan_content):
     flight_plan_dict.update(number_of_flyers=1)
     flight_plan_dict.update(crew_combination="701+901")
     flight_plan_dict.update(current_status=plan_content.get("current_status"))
-    flight_plan_dict.update(front_cabin_name="法外狂徒张三")
-    flight_plan_dict.update(front_cabin_code="006")
-    flight_plan_dict.update(rear_cabin_name="见血封喉李四")
-    flight_plan_dict.update(rear_cabin_code="009")
+    flight_plan_dict.update(front_cabin_name=plan_content.get("student_name"))
+    flight_plan_dict.update(front_cabin_code=plan_content.get("student_code_name"))
+    flight_plan_dict.update(rear_cabin_name=plan_content.get("student_name"))
+    flight_plan_dict.update(rear_cabin_code=plan_content.get("student_code_name"))
     return flight_plan_dict
 
 
-create_fun_dict = {settings.EXAMINATION: create_exam_info, settings.PAPER: create_paper_info,
-                   settings.ONLINE_LEARNING: create_online_learning_record_info,
-                   settings.TEACHING_RESOURCE: create_course_source_info, settings.QUESTION_BANK: create_question_info}
+create_fun_dict = {settings.EXAMINATION: create_exam_info, settings.FLIGHT_PLAN_BASE: create_flight_plan_base,
+                   settings.ONLINE_LEARNING: create_online_learning_record_info, settings.PAPER: create_paper_info,
+                   settings.TEACHING_RESOURCE: create_course_source_info, settings.QUESTION_BANK: create_question_info,
+                   settings.FLIGHT_PLAN_PLANE: refine_flight_plane_info, settings.PLANE_TABLE: allowed_flight_time}
 get_fun_dict = {settings.EXAMINATION: get_exam_question_info,
                 settings.FLIGHT_PLAN_CONTENT: get_flight_plan_content_info}
 
 if __name__ == '__main__':
-    print(asyncio.run(sql_handle.get_table_columns("auto_question_bank")))
-#     asyncio.run(create_flight_plan_info())
-# question_type = {"fill": 4, "judge": 4, "multiple_choice": 4, "short_answer": 5, "single_choice": 12}
-# exam_paper_info = asyncio.run(create_paper_question_info("auto_exam_result_detail", question_type))
-# print(exam_paper_info)
-# source_info = {"course_id": "47981834-c597-4d22-8b5b-0f1ae6b75b58", "keep_time": 50, "user_id": 47981834597}
-# asyncio.run(create_online_learning_record_info("auto_online_learning_record", source_info))
+    # print(asyncio.run(sql_handle.get_table_columns("auto_question_bank")))
+    # question_type = {"fill": 4, "judge": 4, "multiple_choice": 4, "short_answer": 5, "single_choice": 12}
+    # exam_paper_info = asyncio.run(create_paper_question_info("auto_exam_result_detail", question_type))
+    # print(exam_paper_info)
+    # source_info = {"course_id": "47981834-c597-4d22-8b5b-0f1ae6b75b58", "keep_time": 50, "user_id": 47981834597}
+    # asyncio.run(create_online_learning_record_info("auto_online_learning_record", source_info))
+    source_info = {"id": "88b63ec4-d50a-41cb-a2f2-07d216b4ff76", "keep_time": 50, "user_id": 47981834597}
+    asyncio.run(allowed_flight_time(settings.PLANE_TABLE, source_info))
+    # exam_result_condition = {"id": "787e9081-593f-4f63-bda9-deb21d81bd3f"}
+    # asyncio.run(create_exam_result_info("auto_exam_result", exam_result_condition))

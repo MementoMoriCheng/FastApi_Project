@@ -7,7 +7,7 @@
 
 from src.db.config import Base
 from src.utils import generate_uuid
-from sqlalchemy import Column, String, DateTime, func, Float, Integer, Boolean
+from sqlalchemy import Column, String, DateTime, func, Float, Integer, Boolean, DECIMAL
 
 
 class GNSSData(Base):
@@ -26,8 +26,8 @@ class GNSSData(Base):
     gps_milliseconds = Column(Integer, nullable=False, comment="GPS毫秒数")
 
     # 地理位置信息
-    latitude = Column(Float, nullable=False, comment="纬度")
-    longitude = Column(Float, nullable=False, comment="经度")
+    latitude = Column(DECIMAL(precision=17, scale=15), nullable=False, comment="纬度")
+    longitude = Column(DECIMAL(precision=17, scale=14), nullable=False, comment="经度")
     altitude = Column(Float, nullable=False, comment="海拔高度")
 
     # 精度误差信息
