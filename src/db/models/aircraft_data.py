@@ -72,7 +72,7 @@ class FlightData(Base):
     time = Column(DateTime, nullable=False, server_default=func.now())
     update_time = Column(DateTime, nullable=False, server_default=func.now())
     # 北斗数据包解析
-    plane_code = Column(String(12), nullable=False, comment="机号")
+    identify_code = Column(String(12), nullable=False, comment="机号")
     beidou_height = Column(Float, comment="北斗高度")
     ground_speed = Column(Float, comment="地速")
     heading = Column(Float, comment="航向")
@@ -115,7 +115,7 @@ class FlightAlarm(Base):
     __tablename__ = 'flight_alarm'
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    plane_code = Column(String(12), nullable=False, comment="机号")
+    identify_code = Column(String(12), nullable=False, comment="机号")
 
     low_altitude = Column(Boolean, comment="低高度")
     altitude = Column(Float, comment="高度")

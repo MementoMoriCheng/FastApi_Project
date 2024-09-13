@@ -2,8 +2,9 @@ import socket
 import time
 
 # 定义服务器的IP地址和端口号
-SERVER_IP = '127.0.0.1'
-SERVER_PORT = 9988
+# SERVER_IP = '127.0.0.1'
+SERVER_IP = '192.168.0.7'
+SERVER_PORT = 904
 # SERVER_PORT = 12345
 
 # 创建一个UDP套接字

@@ -29,7 +29,7 @@ from src.utils.middle_level_management import export_table_template, convert_id2
 from src.utils.responses import resp_200, resp_404, resp_500, resp_400, fetch_external_upload_file, \
     fetch_do_restore_file
 from src.utils.tools import get_current_server_ip, export_server_datas, restore_server_datas, is_valid_websocket_url, \
-    filter_list, format_sql_statement, is_valid_uuid, insert_sql_statements, is_valid_url
+    filter_list, format_sql_statement, is_valid_uuid, insert_sql_statements, is_valid_url, convert_datetime_to_string
 
 router = APIRouter()
 
@@ -45,9 +45,10 @@ async def get_server_ip():
 
 @router.get("/get_map_interface/", tags=["SysInfo"], summary="获取地图接口")
 async def get_map_interface():
-    map_interface = settings.MAP_INTERFACE
-    if is_valid_url(map_interface):
-        return resp_200(data=map_interface)
+    map_interface_china = settings.MAP_INTERFACE_CHINA
+    map_interface_jiangxi = settings.MAP_INTERFACE_JIANGXI
+    if is_valid_url(map_interface_china) and is_valid_url(map_interface_jiangxi):
+        return resp_200(data=[map_interface_china, map_interface_jiangxi])
     else:
         return resp_400(msg="格式错误，请检查配置文件")
 
@@ -251,6 +252,12 @@ async def import_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                       middle_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                       bak_middle_dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                       *, code: str, file: UploadFile):
+    # 航线比较特殊
+    table_name = f"auto_{code.lower()}"
+    if table_name in [settings.FLIGHT_ROUTE, settings.FLIGHT_WAYPOINT]:
+        code = settings.WAYPOINT
+        table_name = settings.FLIGHT_WAYPOINT
+
     dal.setDb(TableManage)
     res = await dal.get_by(code=code)
     if not res:
@@ -276,7 +283,7 @@ async def import_data(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
     with open(full_file_path, "wb") as f:
         contents = await file.read()
         f.write(contents)
-    table_name = f"auto_{code}"
+
     q_list = await import_table_template(table_name, full_file_path, items, association_, middle_dal)
     try:
         await sql_handle.batch_insert(table_name, q_list)
@@ -316,7 +323,7 @@ async def backup_table_datas(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         table_list = await sql_handle.select(table_name)
         if not table_list:
             table_list = []
-
+        table_list = [convert_datetime_to_string(table_) for table_ in table_list]
         map_table_data[item] = table_list
 
     list_uuids = []
@@ -338,6 +345,7 @@ async def backup_table_datas(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
                             list_uuids.append(data_value)
                     elif isinstance(data_value, list):
                         list_uuids = list_uuids + data_value
+
     list_uuids = list(set(list_uuids))
 
     intermediate_table_data = []

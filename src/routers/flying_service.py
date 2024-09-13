@@ -55,11 +55,16 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
     logger.info(f"创建一条飞行计划:{input_data.dict()}")
 
     plan_info, course_source_dict = await create_single_flying_service(dal, input_data)
+    if course_source_dict and input_data.flight_interval:
+        course_source_dict.update(launch_interval=input_data.flight_interval)
     if not isinstance(plan_info, list):
         return plan_info
+    if not plan_info:
+        return resp_400(msg=f"无法安排！")
     try:
-        await dal.buck_create(plan_info)
-        insert_id = await sql_handle.insert(settings.FLIGHT_PLAN_CONTENT, course_source_dict)
+        await dal.create_all(plan_info)
+        # 写入数据表auto_flight_plan_content
+        # insert_id = await sql_handle.insert(settings.FLIGHT_PLAN_CONTENT, course_source_dict)
     except SQLAlchemyError as e:
         logger.error(e)
         return resp_400(msg=f"{e}")
@@ -70,7 +75,7 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
                                              handle_reason=input_data.description if input_data.description else '创建一条飞行计划')
     await sql_handle.add_records("log_manage", mysql_log_data)
 
-    return resp_200(data=insert_id)
+    return resp_200()
 
 
 @router.post('/auto_batch', tags=['FlyingService'], summary="根据信息自动创建飞行计划")
@@ -84,6 +89,7 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
         try:
             plan_parameter, plan_content, plane_info, stu_info = await flight_design.plan_parameter_setting_collect(
                 plan_param_condition)
+            obj_in["name"] = plan_parameter["name"]
         except Exception as e:
             logger.error(e)
             continue
@@ -113,7 +119,7 @@ async def create_flying_service(dal: ExecDAL = Depends(DALGetter(ExecDAL)), *, i
     try:
         await dal.create_all(end_list)
         # 写入数据表auto_flight_plan_content
-        await sql_handle.batch_insert(settings.FLIGHT_PLAN_CONTENT, plan_content_list)
+        # await sql_handle.batch_insert(settings.FLIGHT_PLAN_CONTENT, plan_content_list)
     except SQLAlchemyError as e:
         logger.error(e)
         return resp_400(msg=f"{e}")

@@ -89,6 +89,7 @@ async def create_column(dal: ExecDAL = Depends(DALGetter(ExecDAL)),
         except Exception as e:
             # 删除列
             sql_handle.downgrade_columns(table_code, [obj_in.code])
+            sql_handle.refresh_metadata()
             return resp_400(msg=str(e))
 
     res = await dal.create(obj_in)

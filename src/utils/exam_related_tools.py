@@ -117,7 +117,7 @@ class CalculateGrade:
         if not student_answer:
             return False
 
-        return student_answer.lower() == expected_answer.lower()
+        return student_answer.lower().strip() == expected_answer.lower().strip()
 
     @staticmethod
     def check_multiple_choice_answer(expected_answers: str, student_answer: str, score=None) -> bool:
@@ -155,13 +155,13 @@ class CalculateGrade:
         if not student_answer:
             return False
         s_a, e_a = None, None
-        if student_answer.lower() in ['true', 't', 'y', 'yes']:
+        if student_answer.lower() in ['true', 't', 'y', 'yes', 1, "1"]:
             s_a = True
-        if expected_answer.lower() in ['true', 't', 'y', 'yes']:
+        if expected_answer.lower() in ['true', 't', 'y', 'yes', 1, "1"]:
             e_a = True
-        if student_answer.lower() in ['false', 'f', 'n', 'no']:
+        if student_answer.lower() in ['false', 'f', 'n', 'no', 0, "0"]:
             s_a = False
-        if expected_answer.lower() in ['false', 'f', 'n', 'no']:
+        if expected_answer.lower() in ['false', 'f', 'n', 'no', 0, "0"]:
             e_a = False
         return s_a == e_a
 

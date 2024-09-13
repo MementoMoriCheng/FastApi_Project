@@ -1,27 +1,39 @@
+import json
 import struct
 import datetime
 import pandas as pd
+
 from src.utils import generate_uuid
+from src.config.setting import settings
 
 
-def generate_mysql_flight_alarm(parsed_flight_data, time_str):
+def generate_mysql_flight_alarm(parsed_flight_data, alarm_data, time_str):
     """
     Generate a mysql flight data
     Args:
         parsed_flight_data:
+        alarm_data:
         time_str: 北斗数据包解析的数据
 
     Returns:
 
     """
+    low_altitude, low_speed, lost_speed = False, False, False
+    if parsed_flight_data[8] <= alarm_data["low_flight_altitude"]:
+        low_altitude = True
+    if parsed_flight_data[12] <= alarm_data["low_flight_speed"]:
+        low_speed = True
+    if parsed_flight_data[12] <= alarm_data["lost_speed"]:
+        lost_speed = True
+
     flight_data = {
         'id': generate_uuid(),
-        'plane_code': parsed_flight_data[3],
-        'low_altitude': False,
+        'identify_code': parsed_flight_data[3],
+        'low_altitude': low_altitude,
         'altitude': parsed_flight_data[8],
-        'low_speed': False,
+        'low_speed': low_speed,
         'speed': parsed_flight_data[12],
-        'lost_speed': False,
+        'lost_speed': lost_speed,
         'over_temperature': False,
         'temperature': None,
         'shutdown': False,
@@ -49,7 +61,7 @@ def generate_mysql_flight_data(parsed_flight_data, time_str):
     flight_data = {
         'id': generate_uuid(),
         'time': time_str,
-        'plane_code': parsed_flight_data[3],
+        'identify_code': parsed_flight_data[3],
         'beidou_height': parsed_flight_data[8],
         'ground_speed': parsed_flight_data[12],
         'heading': parsed_flight_data[21],
@@ -150,6 +162,28 @@ def split_gnss_data(binary_content):
     return [binary_content[i * 66:(i + 1) * 66] for i in range(total_substrings)]
 
 
+def calculate_hex_checksum(data):
+    """
+    CRC校验
+    Args:
+        data:
+
+    Returns:
+
+    """
+    # 确保数据是字节串
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+
+    # 初始化校验和为0
+    checksum = sum(data)
+
+    # 将校验和转换为16进制格式，并填充到至少2位
+    hex_checksum = '{:02X}'.format(checksum & 0xFF)
+
+    return hex_checksum
+
+
 def parse_gnss_data(data):
     """
     解析gnss内容
@@ -171,8 +205,9 @@ def parse_gnss_data(data):
     gps_seconds_in_week = gps_seconds % 604800
     # 计算GPS总秒数
     gps_total_seconds = gps_week * 604800 + gps_seconds_in_week
-    # 合并日期和时间
+    # 合并日期和时间并转换成北京时间
     utc_date_time = gps_epoch + datetime.timedelta(seconds=gps_total_seconds)
+    beijing_date_time = utc_date_time + datetime.timedelta(hours=8)
 
     # 解析卫星信息
     observation_satellite = int(bin(data_to_be_parsed_1)[2:6], 2)
@@ -180,11 +215,20 @@ def parse_gnss_data(data):
     rtk_satellite = int(bin(data_to_be_parsed_2)[2:6], 2)
     calculate_satellite = int(bin(data_to_be_parsed_2)[6:], 2)  # 低四位
 
-    return ((sync_code1, sync_code2, sync_code3, identify_code, gps_week, gps_milliseconds, latitude, longitude,
+    # 取出指定范围的数据
+    data_slice = data[3:65]
+    # 计算16进制校验和
+    hex_checksum = int(calculate_hex_checksum(data_slice), 16)
+
+    # 机号关系映射
+    station_id_2_plane_id = json.loads(settings.STATION_ID_2_PLANE_ID)
+    station_2_plane = station_id_2_plane_id.get(str(identify_code))
+
+    return ((sync_code1, sync_code2, sync_code3, station_2_plane, gps_week, gps_milliseconds, latitude, longitude,
              altitude, latitude_stddev, longitude_stddev, altitude_stddev, horizon_speed, upward_speed, track_direction,
              positioning_status, observation_satellite, calculate_satellite, rtk_satellite, differential_age,
              azimuth, pitch, checksum),
-            utc_date_time, identify_code, gps_total_seconds)
+            beijing_date_time, station_2_plane, gps_total_seconds, hex_checksum)
 
 
 class ExcelParser:
@@ -241,7 +285,6 @@ class ExcelParser:
             raise ValueError(f"Column '{column}' not found in sheet '{sheet_name}'.")
         return df[df[column] == value]
 
-
 # 示例使用
 # if __name__ == "__main__":
 #     parser = ExcelParser('D:\\ftp\\tmp\\restore\\import_data\\auto_question_bank.csv')
@@ -257,12 +300,12 @@ class ExcelParser:
 #     answer = df.answer
 #     evaluate_answers = df.evaluate_answers
 
-    # src_path = "D:\\File\\dzm9b"
-    # with open(src_path, "rb") as f:
-    #     binary_content = f.read()
-    # split_strings = split_gnss_data(binary_content)
-    # # print(split_strings)
-    # target_byte = split_strings[300]
-    # # print(target_byte)
-    # a, b, c = parse_gnss_data(target_byte)
-    # print(a, b, c)
+# src_path = "D:\\File\\dzm9b"
+# with open(src_path, "rb") as f:
+#     binary_content = f.read()
+# split_strings = split_gnss_data(binary_content)
+# # print(split_strings)
+# target_byte = split_strings[300]
+# # print(target_byte)
+# a, b, c = parse_gnss_data(target_byte)
+# print(a, b, c)

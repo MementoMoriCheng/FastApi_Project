@@ -1,14 +1,13 @@
-import asyncio
 import json
-from json import JSONDecodeError
-
+import asyncio
 import websockets
 import threading
 
-from src.utils.constant import FLIGHT_DATA_TABLE, RESERVE
+from json import JSONDecodeError
 from src.utils.logger import logger
 from src.config.setting import settings
 from src.utils.sql_config import sql_handle
+from src.utils.constant import FLIGHT_DATA_TABLE, RESERVE, FLIGHT_ALARM_TABLE
 
 # 存储所有的客户端
 Clients = set()
@@ -82,32 +81,38 @@ class WebSocketService:
                 # 鉴别回放数据/实时数据
                 recv_data = json.loads(recv_text)
                 print(f"Received Data From Client:{recv_text}")
-                gnss_fields = settings.GNSS_FIELDS.split(',')
+                real_time_gnss_fields = settings.REAL_TIME_GNSS_FIELDS.split(',')
+                alarm_fields = settings.ALARM_FIELDS.split(',')
                 select_condition = {"identify_code": recv_data.get("code"), "is_delete": RESERVE}
 
-                if recv_data["playback"]:
-                    select_condition["flight_time"] = {"value": recv_data.get("flight_time"), "operator": "includes"}
-                    way_point = recv_data["way_point"] if recv_data.get("way_point") else 10
-                    data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition,
-                                                        fields=gnss_fields,
-                                                        order_by={"gps_milliseconds": True})
-                    data_length = len(data_info)
-                    if data_length == 0:
-                        message = json.dumps({"type": "send", "content": ""})
-                        await self.callback_send(message, websocket=websocket)
-                        break
-                    for data in range(1, data_length, data_length // way_point):
-                        message = json.dumps({"type": "send", "content": data_info[data] if data else " "})
-                        await self.callback_send(message, websocket=websocket)
+                data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition, limit=1,
+                                                    fields=real_time_gnss_fields,
+                                                    order_by={"gps_milliseconds": False})
+
+                origin_msg = {"type": "send", "content": "", "alarm_data": ""}
+                if data_info:
+                    latitude = str(data_info[0].get("latitude"))
+                    longitude = str(data_info[0].get("longitude"))
+                    data_info[0]["latitude"] = latitude
+                    data_info[0]["longitude"] = longitude
+                    origin_msg["content"] = data_info[0]
+                    flight_time = data_info[0].get("flight_time")
+                    select_alarm_condition = {"identify_code": recv_data.get("code"), "time": flight_time,
+                                              "is_delete": RESERVE}
+                    alarm_info = await sql_handle.select(FLIGHT_ALARM_TABLE, conditions=select_alarm_condition, limit=1,
+                                                         fields=alarm_fields, order_by={"time": False})
+
+                    origin_msg["alarm_data"] = alarm_info[0] if alarm_info else ""
+                    message = json.dumps(origin_msg)
+                    if settings.ANALOG:
+                        # 模拟实时数据
+                        update_condition = {"id": data_info[0]["id"]}
+                        data_info[0]["is_delete"] = 1
+                        await sql_handle.update(FLIGHT_DATA_TABLE, update_condition, data_info[0])
+                        # 模拟实时数据
                 else:
-                    data_info = await sql_handle.select(FLIGHT_DATA_TABLE, conditions=select_condition, limit=1,
-                                                        fields=gnss_fields,
-                                                        order_by={"gps_milliseconds": False})
-                    message = json.dumps({"type": "send", "content": data_info[0] if data_info else " "})
-                    update_condition = {"id": data_info[0]["id"]}
-                    data_info[0]["is_delete"] = 1
-                    await sql_handle.update(FLIGHT_DATA_TABLE, update_condition, data_info[0])
-                    await self.callback_send(message, websocket=websocket)
+                    message = json.dumps(origin_msg)
+                await self.callback_send(message, websocket=websocket)
 
             # 链接断开
             except websockets.ConnectionClosed:
@@ -122,7 +127,7 @@ class WebSocketService:
                     Clients.remove(websocket)
                 break
             # 报错
-            except (Exception, JSONDecodeError, ValueError, TypeError, KeyError) as e:
+            except (Exception, JSONDecodeError, ValueError, TypeError, KeyError, IndexError) as e:
                 logger.error("WSlinkError ", e)
                 if websocket in Clients:  # 先检查连接是否存在
                     Clients.remove(websocket)

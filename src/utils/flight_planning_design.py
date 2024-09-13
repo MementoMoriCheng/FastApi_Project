@@ -8,10 +8,11 @@ from src.utils.tools import filter_list
 from src.config.setting import settings
 from datetime import timedelta, datetime
 from src.utils.sql_config import sql_handle
-from src.utils.constant import DEFAULT_PLY, SubjectSchedulingPriority, SchedulingCondition, AIRCRAFT_ID, \
-    FLIGHT_PLAN_PARAMETER, FLIGHT_PLAN_CONTENT, AIRCRAFT_TYPE, PLAN_ROUTE, PLAN_COACH, COACH_NAME_COL, FLYABLE_ITEM, \
-    NO_FLY_ITEM, PLANE_STATUS, AIRCRAFT_STATUS, STATUS_NUMBER, STATUS_CONTENT, AIRSPACE_TABLE, AIRSPACE_AIRPORT, \
-    AIRSPACE, ADJACENT_AIRSPACE, AIRSPACE_NUMBER, STUDENT_CODE_NAME
+from src.utils.constant import DEFAULT_PLY, FLIGHT_INTERVAL, SubjectSchedulingPriority, SchedulingCondition, \
+    AIRCRAFT_ID, FLIGHT_PLAN_PARAMETER, FLIGHT_PLAN_CONTENT, AIRCRAFT_TYPE, PLAN_ROUTE, PLAN_COACH, COACH_NAME_COL, \
+    FLYABLE_ITEM, NO_FLY_ITEM, PLANE_STATUS, AIRCRAFT_STATUS, STATUS_NUMBER, STATUS_CONTENT, AIRSPACE_TABLE, \
+    AIRSPACE_AIRPORT, AIRSPACE, ADJACENT_AIRSPACE, AIRSPACE_NUMBER, STUDENT_CODE_NAME, TRAINEE_IN_TRAINING, ENABLE, \
+    INCUMBENT_FACULTY
 
 
 def parse_input(obj_in):
@@ -32,7 +33,7 @@ def parse_input(obj_in):
     start_time_str = obj_in.get("start_time")
     end_time_str = obj_in.get("end_time")
     exclude_time_strs = obj_in.get("exclude_time")
-    flight_interval = obj_in.get("flight_interval")
+    flight_interval = obj_in.get("flight_interval") if obj_in.get("flight_interval") else FLIGHT_INTERVAL
     status = obj_in.get("status")
     name = obj_in.get("name")
     handle_user = obj_in.get("handle_user")
@@ -140,6 +141,28 @@ def check_time(is_exist_plan, start_time, end_time):
     for plan in is_exist_plan:
         conflict = is_overlapping(plan.real_time_start, plan.real_time_end, start_time, end_time)
     return conflict
+
+
+def get_remaining_time(latest_time, break_time_length, start_time, end_time):
+    """
+    检测剩余时间是否满足安排飞行, remaining = True不满足，False满足
+    Args:
+        latest_time:
+        break_time_length:
+        start_time:
+        end_time:
+
+    Returns:
+
+    """
+    remaining = True
+    if isinstance(start_time, str):
+        start_time = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+    if isinstance(end_time, str):
+        end_time = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+    if start_time <= (latest_time + break_time_length) <= end_time:
+        remaining = False
+    return remaining
 
 
 def is_overlapping(start1, end1, start2, end2):
@@ -341,8 +364,8 @@ def gen_maintenance_period(start_time, end_time, plan_duration, break_time):
     work_start_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
     work_end_time = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
 
-    work_time_step = timedelta(minutes=plan_duration)
-    break_time_length = timedelta(minutes=break_time)
+    work_time_step = timedelta(minutes=int(plan_duration))
+    break_time_length = timedelta(minutes=int(break_time))
 
     break_time_slots = []
 
@@ -532,7 +555,7 @@ class FlightAlgorithDesign:
             u_flight_outline飞行大纲
         """
         u_info, u_name = [], []
-        uid_res = await sql_handle.select(settings.STUDENT_TABLE)
+        uid_res = await sql_handle.select(settings.STUDENT_TABLE, {TRAINEE_IN_TRAINING: ENABLE})
         for stu_uid in uid_res:
             u_info.append({"id": stu_uid.get("id"), "uid": stu_uid.get("UID"), "student_name": stu_uid.get("name"),
                            "student_code_name": stu_uid.get(STUDENT_CODE_NAME),
@@ -575,7 +598,7 @@ class FlightAlgorithDesign:
         """
         res = []
         if not ids:
-            fpc_res = await sql_handle.select(PLAN_COACH)
+            fpc_res = await sql_handle.select(PLAN_COACH, {INCUMBENT_FACULTY: ENABLE})
             for fpc in fpc_res:
                 coach_name = fpc.get(COACH_NAME_COL)
                 res.append({"id": fpc.get("id"), "coach_name": coach_name})
@@ -700,6 +723,7 @@ class FlightAlgorithDesign:
         # 进度落后者进行标记、排序
 
         # （3）安排带飞教员
+        pass
 
     @staticmethod
     async def calculate_course_progress(sid):

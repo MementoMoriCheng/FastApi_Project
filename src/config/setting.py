@@ -68,6 +68,8 @@ class Settings(BaseSettings):
     WS_CONFIG: str = dotenv_config.get("WS_CONFIG")
 
     GNSS_FIELDS: str = dotenv_config.get("GNSS_FIELDS")
+    REAL_TIME_GNSS_FIELDS: str = dotenv_config.get("REAL_TIME_GNSS_FIELDS")
+    ALARM_FIELDS: str = dotenv_config.get("ALARM_FIELDS")
 
     LOG_PATH: str = dotenv_config.get("LOG_PATH")
     LOG_NAME: str = dotenv_config.get("LOG_NAME")
@@ -81,6 +83,7 @@ class Settings(BaseSettings):
     QUESTION_TYPE: str = dotenv_config.get("QUESTION_TYPE")
 
     EXAMINATION: str = dotenv_config.get("EXAMINATION")
+    EXAM_RESULT_DETAIL: str = dotenv_config.get("EXAM_RESULT_DETAIL")
     PAPER: str = dotenv_config.get("PAPER")
     ONLINE_LEARNING: str = dotenv_config.get("ONLINE_LEARNING")
     QUESTION_BANK: str = dotenv_config.get("QUESTION_BANK")
@@ -96,6 +99,9 @@ class Settings(BaseSettings):
     PLANE_TABLE: str = dotenv_config.get("PLANE_TABLE")
     FLIGHT_ROUTE: str = dotenv_config.get("FLIGHT_ROUTE")
     FLIGHT_WAYPOINT: str = dotenv_config.get("FLIGHT_WAYPOINT")
+    WAYPOINT: str = dotenv_config.get("WAYPOINT")
+
+    STATION_ID_2_PLANE_ID: str = dotenv_config.get("STATION_ID_2_PLANE_ID")
 
     CITY_NAME: str = dotenv_config.get("CITY_NAME")
     COUNTRY: str = dotenv_config.get("COUNTRY")
@@ -110,11 +116,27 @@ class Settings(BaseSettings):
 
     SYNC_DATAS: str = dotenv_config.get("SYNC_DATAS")
 
-    MAP_INTERFACE: str = dotenv_config.get("MAP_INTERFACE")
+    MAP_INTERFACE_JIANGXI: str = dotenv_config.get("MAP_INTERFACE_JIANGXI")
+    MAP_INTERFACE_CHINA: str = dotenv_config.get("MAP_INTERFACE_CHINA")
 
     DEFAULT_PASSWORD: str = dotenv_config.get("DEFAULT_PASSWORD")
     DEFAULT_ROLE_ID: str = dotenv_config.get("DEFAULT_ROLE_ID")
     DEFAULT_SYSTEM_ID: str = dotenv_config.get("DEFAULT_SYSTEM_ID")
+
+    DEFAULT_TIME_HOUR: int = dotenv_config.get("DEFAULT_TIME_HOUR")
+    DEFAULT_TIME_MINUTE: int = dotenv_config.get("DEFAULT_TIME_MINUTE")
+    DEFAULT_TIME_SECOND: int = dotenv_config.get("DEFAULT_TIME_SECOND")
+    DEFAULT_TIME_MICROSECOND: int = dotenv_config.get("DEFAULT_TIME_MICROSECOND")
+
+    DEFAULT_TIME_DAY: int = dotenv_config.get("DEFAULT_TIME_DAY")
+    DEFAULT_TIME_MONTH: int = dotenv_config.get("DEFAULT_TIME_MONTH")
+    DEFAULT_TIME_WEEK: int = dotenv_config.get("DEFAULT_TIME_WEEK")
+
+    LOW_FLIGHT_ALTITUDE: float = dotenv_config.get("LOW_FLIGHT_ALTITUDE")
+    LOW_FLIGHT_SPEED: float = dotenv_config.get("LOW_FLIGHT_SPEED")
+    LOST_SPEED: float = dotenv_config.get("LOST_SPEED")
+
+    ANALOG: int = dotenv_config.get("ANALOG")
 
 
 settings = Settings()

@@ -5,10 +5,11 @@
 # @File    : tools.py
 # @Software: PyCharm
 # @desc    : 工具类
-import base64
 import os
-import random
 import re
+import base64
+import hashlib
+import random
 import shutil
 import string
 import socket
@@ -26,8 +27,16 @@ from src.config.setting import settings
 from src.utils.responses import resp_500
 from pydantic import BaseModel, validator
 from src.db.init_db import drop_all_table
+from src.utils.sql_config import sql_handle
 from src.utils.ftp_util import RemoteFTPService
 from src.utils.constant import NETWORK_CARD_NAME
+
+
+def get_md5_of_string(input_string):
+    m = hashlib.md5()
+    m.update(input_string.encode('utf-8'))
+    md5_hash = m.hexdigest()
+    return md5_hash
 
 
 class WebsocketUrl(BaseModel):
@@ -129,28 +138,48 @@ def list2dict_2(dict_list):
     return items
 
 
-def gen_select_conditions(column_list, value, operator):
+def convert_datetime_to_string(data):
+    for key, value in data.items():
+        if isinstance(value, datetime):
+            data[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+    return data
+
+
+async def gen_select_conditions(column_list, value, operator, association_dict):
     """
     生成筛选条件
     Args:
         column_list: 列
         value:
         operator:
+        association_dict:关联表、列
 
     Returns:
 
     """
     select_conditions = dict()
     for column in column_list:
-        select_conditions[column] = {'value': value, 'operator': operator}
+        if column in association_dict.keys():
+            association_info = association_dict[column]
+            association_conditions = {association_info["tableCol"]: {"value": value, "operator": "includes"}}
+            association_res = await sql_handle.select(f"auto_{association_info['tableCode']}",
+                                                      conditions=association_conditions)
+            if association_res:
+                association_value = association_res[0].get("id")
+            else:
+                association_value = value
+        else:
+            association_value = value
+        select_conditions[column] = {'value': association_value, 'operator': operator}
     return select_conditions
 
 
-def parse_select_conditions(column_info):
+async def parse_select_conditions(column_info, association_dict):
     """
     解析条件
     Args:
         column_info:
+        association_dict:
 
     Returns:
 
@@ -163,7 +192,7 @@ def parse_select_conditions(column_info):
             column_list = column_info.get("key")
             value = column_info.get("value")
             operator = column_info.get("operator")
-            conditions = gen_select_conditions(column_list, value, operator)
+            conditions = await gen_select_conditions(column_list, value, operator, association_dict)
             select_conditions.update(conditions)
     limit = column_info.get("limit")
     offset = column_info.get("offset")
@@ -179,7 +208,7 @@ def filter_dict(dict_data):
     Returns:
 
     """
-    return {k: v for k, v in dict_data.items() if v or v is False or v == 0}
+    return {k.strip(): v for k, v in dict_data.items() if v or v is False or v == 0}
 
 
 def filter_list(list_data):

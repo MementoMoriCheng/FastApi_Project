@@ -13,6 +13,7 @@ class CreatePaperSchema(BaseModel):
     # --------基本信息
     exam_id: str = None
     UID: str = None
+    username: str = None
     course_1: str = None
     course_2: str = None
     course_3: str = None
@@ -45,6 +46,19 @@ class CreatePaperSchema(BaseModel):
     short_answer_score: float = None
 
 
+class StartExaminationSchema(BaseModel):
+    # --------基本信息
+    exam_id: str = None
+    UID: str = None
+    username: str = None
+
+
+class RevisePaperSchema(BaseModel):
+    paper_id: str = None
+    QID: str = None
+    new_QID: str = None
+
+
 class SubmitAnswerSchema(BaseModel):
     paper_id: str = None
     UID: str = None
@@ -54,6 +68,7 @@ class SubmitAnswerSchema(BaseModel):
 
 class CalculatePayload(BaseModel):
     paper_id: str
+    UID: str = None
     # -----自动阅卷部分
     single_choice: int = 1
     multiple_choice: int = 1

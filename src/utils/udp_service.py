@@ -4,15 +4,12 @@
 # @Author  : yilifeng, MementoMori
 # @File    : udp_service.py
 # @Software: PyCharm
-
 import os
-import shutil
 import asyncio
 from src.utils.logger import logger
 from src.config.setting import settings
 from src.utils.sql_config import sql_handle
-from src.utils.ftp_util import RemoteFTPService
-from src.utils.constant import SHORT_AIRCRAFT_ID, station_id_2_plane_id, AIRFRAME_TIME, PROPELLER_TIME, ENGINE_TIME
+from src.utils.constant import SHORT_AIRCRAFT_ID, AIRFRAME_TIME, PROPELLER_TIME, ENGINE_TIME
 from src.utils.analyzing_data_tools import split_gnss_data, parse_gnss_data, generate_mysql_gnss_data, \
     generate_mysql_flight_data, generate_mysql_flight_alarm
 
@@ -116,11 +113,24 @@ class UDPService:
             local_path = os.path.join(base_dir, 'tmp')
             if not os.path.exists(local_path):
                 os.makedirs(local_path)
-            parsed_gnss_data, time_str, identify_code, gps_total_seconds = parse_gnss_data(first_byte)
-            gnss_data = generate_mysql_gnss_data(parsed_gnss_data, time_str)
-            await sql_handle.add_records("gnss_data", gnss_data)
+            parsed_gnss_data, time_str, short_aircraft_id, gps_total_seconds, hex_checksum = parse_gnss_data(first_byte)
+            if parsed_gnss_data[-1] == hex_checksum:
+                gnss_data = generate_mysql_gnss_data(parsed_gnss_data, time_str)
+                await sql_handle.add_records("gnss_data", gnss_data)
 
-            short_aircraft_id, plane_dict = station_id_2_plane_id.get(str(identify_code)), {}
+            # 告警信息
+            alarm_data = await sql_handle.select("auto_flight_alarm")
+            if not alarm_data:
+                alarm_data_dict = {
+                    "low_flight_altitude": settings.LOW_FLIGHT_ALTITUDE,
+                    "low_flight_speed": settings.LOW_FLIGHT_SPEED,
+                    "lost_speed": settings.LOST_SPEED
+                }
+            else:
+                alarm_data_dict = alarm_data[0]
+            flight_alarm_data = generate_mysql_flight_alarm(parsed_gnss_data, alarm_data_dict, time_str)
+            await sql_handle.add_records("flight_alarm", flight_alarm_data)
+            plane_dict = {}
             condition = {SHORT_AIRCRAFT_ID: short_aircraft_id}
             plane_res = await sql_handle.select(settings.PLANE_TABLE, conditions=condition)
             plane_info = plane_res[0]
@@ -135,30 +145,6 @@ class UDPService:
                 plane_dict[PROPELLER_TIME] = propeller_time + 1
             if plane_dict:
                 await sql_handle.update(settings.PLANE_TABLE, conditions=condition, updated_data=plane_dict)
-            # # TODO 文件名要按指定格式？
-            # from datetime import datetime
-            # time_ = datetime.now().strftime('%Y%m%d%H%M%S')
-            # file_name = f'{time_}-{identify_code}-{time_str}'
-            # local_file_path = os.path.join(local_path, f"{file_name}")
-            # with open(local_file_path, 'wb') as file:
-            #     file.write(data)
-            # logger.warning(f'UDP Server Received Data,{file_name}')
-            # ftp_util = RemoteFTPService()
-            # if ftp_util and ftp_util.login:
-            #     try:
-            #         encrypted_data = await ftp_util.encrypt_file(local_file_path)
-            #         with open(local_file_path, "wb") as f:
-            #             f.write(encrypted_data)
-            #         remote_file_path = os.path.join(settings.FTP_REMOTE_PATH, file_name)
-            #         ftp_file = open(local_file_path, "rb")
-            #         await ftp_util.upload_encrypted_data_to_ftp(ftp_file, remote_file_path)
-            #         ftp_file.close()
-            #     except IOError as ftp_err:
-            #         logger.error(ftp_err)
-            #         raise ftp_err
-            #     finally:
-            #         ftp_util.remote_ftp_close()
-            # shutil.rmtree(local_path)
         except Exception as error:
             logger.error(error)
             return

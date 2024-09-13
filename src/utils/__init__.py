@@ -68,9 +68,9 @@ def generate_uuid():
 
 
 def generate_bigint_id():
-    timestamp = int(time.time() * 1000)
-    random_part = random.randint(0, 999999)
-    bigint_id = (timestamp << 20) + random_part
+    timestamp = int(str(int(time.time()))[:7])
+    random_part = random.randint(0, 99999999)
+    bigint_id = int(f"{timestamp}{random_part:06d}")
     return bigint_id
 
 

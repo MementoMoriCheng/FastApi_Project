@@ -26,6 +26,7 @@ ENABLE = 1  # 角色已启用
 
 # 飞行数据表名
 FLIGHT_DATA_TABLE = "gnss_data"
+FLIGHT_ALARM_TABLE = "flight_alarm"
 
 # 中间表
 INTERMEDIATE_TABLE = "intermediate_table"
@@ -63,14 +64,31 @@ ADJACENT_AIRSPACE = "x_l_k_y__XXxA"
 
 # 教员表
 PLAN_COACH = "auto_j_y_x_x_b__etdf"
-COACH_NAME_COL = "x_m__QYBH"
+COACH_NAME_COL = "name"
+INCUMBENT_FACULTY = "z_w__FMTN"
 # 航线表
 PLAN_ROUTE = "auto_h_x_g_l__gfxb"
 # 学员表
 PLAN_STUDENT = "auto_x_y_x_x_b__dxtc"
 STUDENT_CODE_NAME = "d_h__PDxr"
+GRADUATION_DATE = "b_y_r_q__jJyN"
+TRAINEE_IN_TRAINING = "z_x__nFds"
+BIRTHDAY = "ch_sh_r_q__iWJm"
 # 飞机表
 PLAN_PLANE = "auto_f_j_x_x_d_j_b__hrwm"
+# 三证信息表
+CERTIFICATES_TABLE = "auto_s_zh_x_x_d_j_b__mr_p"
+# 飞机履历信息表
+BIOGRAPHICAL_TABLE = "auto_f_j_l_l_b_y_c__jfbx"
+# 体检信息表
+HEALTH_EXAMINATION = "auto_t_j_x_x_b__dwtf"
+# 技术检查登记表
+TECHNICAL_INSPECTION = "auto_j_sh_j_ch_b__npfb"
+
+IDENTITY_DICT = {
+    PLAN_STUDENT: "学员",
+    PLAN_COACH: "教员"
+}
 
 # 网卡名字
 NETWORK_CARD_NAME = ["virtual", "vmware", "vmnet", "vethernet (wsl)"]
@@ -79,9 +97,6 @@ NETWORK_CARD_NAME = ["virtual", "vmware", "vmnet", "vethernet (wsl)"]
 # 题库信息
 COLUMNS_TO_KEEP = ['QID', 'department', 'major', 'course', 'chapter', 'section', 'type', 'option_number', 'question',
                    'evaluate_answers', 'answer']
-
-# 机载站号对应飞机简号
-station_id_2_plane_id = {"2": "20", "3": "19", "4": "18", "5": "21"}
 
 
 class RecordsStatusCode:
@@ -132,6 +147,15 @@ class QuestionTypeIndex:
 
 
 QUESTION_TYPE_LIST = ['single_choice_num', 'multiple_choice_num', 'fill_num', 'judge_num', 'short_answer_num']
+
+TYPE_DICT = {
+    0: "single_count",
+    1: "multiple_count",
+    2: "fill_count",
+    3: "judge_count",
+    4: "short_ans_count"
+}
+
 DEFAULT_EXAMINATION = {
     "course_1": None,
     "course_2": None,
@@ -214,7 +238,7 @@ FLIGHT_DATA = {
     'id': None,
     'time': None,
     'update_time': None,
-    'plane_code': None,
+    'identify_code': None,
     'beidou_height': None,
     'ground_speed': None,
     'heading': None,
@@ -248,7 +272,7 @@ FLIGHT_DATA = {
 # 数据库记录FLIGHT_ALARM格式
 FLIGHT_ALARM = {
     'id': None,
-    'plane_code': None,
+    'identify_code': None,
     'low_altitude': None,
     'altitude': None,
     'low_speed': None,

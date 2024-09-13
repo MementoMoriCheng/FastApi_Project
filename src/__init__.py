@@ -20,6 +20,7 @@ from src.config.setting import settings
 from src.utils.authentication import verify_token
 from src.utils.logger import logger
 from src.utils.ftp_util import FTPError
+from src.utils.scheduled_task import run_scheduled_tasks
 from src.utils.udp_service import UDPService
 
 from src.utils.udp_service import u_s
@@ -105,6 +106,7 @@ def register_exception_handler(app):
 def register_event(app):
     @app.on_event("startup")
     async def startup_event():
+        await asyncio.create_task(run_scheduled_tasks())
         print("startup UDP service.")
         loop = asyncio.get_running_loop()
         await asyncio.create_task(u_s.start(loop))
