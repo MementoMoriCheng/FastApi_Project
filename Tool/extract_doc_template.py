@@ -4,6 +4,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from statistics import median
 
+import httpx
 from docx import Document
 from openai import OpenAI
 from docx.oxml.ns import qn
@@ -14,13 +15,18 @@ MONEY_PATTERN = re.compile(r"(元|万元|亿元|人民币|￥|¥)")
 PERCENT_PATTERN = re.compile(r"%|％")
 ID_LIKE_PATTERN = re.compile(r"[0-9Xx]{8,}")
 STRUCTURED_VALUE_PATTERN = re.compile(r"[A-Za-z0-9].*[A-Za-z0-9]")
-ADDRESS_HINT_PATTERN = re.compile(r"(省|市|区|县|路|街|号|室)")
+ADDRESS_HINT_PATTERN = re.compile(r"(省|市|区|县|路|街|室|号楼|楼号|门牌|地址)")
+SHORT_NUMERIC_VALUE_PATTERN = re.compile(r"^\d+(?:\.\d+)?$")
+NUMERIC_WITH_UNIT_PATTERN = re.compile(r"^\d+(?:\.\d+)?(?:个?月|个月|年|天|次|家|户|人|项)$")
 
 DEFAULT_LLM_MODEL = os.getenv("DOC_TEMPLATE_LLM_MODEL", "qwen-max")
 DEFAULT_LLM_BASE_URL = os.getenv("DOC_TEMPLATE_LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").strip()
 DEFAULT_LLM_API_KEY = os.getenv("DOC_TEMPLATE_LLM_API_KEY", "sk-0b4c79748dc04bd8bebbadde4a566fba").strip()
 DEFAULT_LLM_MAX_WORKERS = max(1, int(os.getenv("DOC_TEMPLATE_LLM_MAX_WORKERS", "8")))
 DEFAULT_LLM_BATCH_SIZE = max(1, int(os.getenv("DOC_TEMPLATE_LLM_BATCH_SIZE", "8")))
+DEFAULT_LLM_TIMEOUT = max(5.0, float(os.getenv("DOC_TEMPLATE_LLM_TIMEOUT", "90")))
+DEFAULT_LLM_CONNECT_TIMEOUT = max(1.0, float(os.getenv("DOC_TEMPLATE_LLM_CONNECT_TIMEOUT", "10")))
+DEFAULT_LLM_MAX_RETRIES = max(0, int(os.getenv("DOC_TEMPLATE_LLM_MAX_RETRIES", "0")))
 
 
 def _clean_text(text):
@@ -169,6 +175,14 @@ def _score_cell_text(text):
         variable_score += 2
         reasons.append("contains_digits")
 
+    if SHORT_NUMERIC_VALUE_PATTERN.fullmatch(text):
+        variable_score += 2
+        reasons.append("short_numeric_value")
+
+    if NUMERIC_WITH_UNIT_PATTERN.fullmatch(text):
+        variable_score += 2
+        reasons.append("numeric_with_unit")
+
     if DATE_PATTERN.search(text):
         variable_score += 3
         reasons.append("date_like")
@@ -185,7 +199,7 @@ def _score_cell_text(text):
         variable_score += 2
         reasons.append("id_like")
 
-    if ADDRESS_HINT_PATTERN.search(text) and length >= 10:
+    if ADDRESS_HINT_PATTERN.search(text) and length >= 10 and "证件号" not in text:
         variable_score += 2
         reasons.append("address_like")
 
@@ -288,6 +302,44 @@ def _coerce_cell_classification(value):
     if value in {"fixed", "variable", "unknown"}:
         return value
     return "unknown"
+
+
+def _normalize_llm_result(llm_result):
+    if isinstance(llm_result, str):
+        try:
+            llm_result = json.loads(llm_result)
+        except json.JSONDecodeError:
+            return {"row_type": "", "cells": [], "field_pairs": [], "notes": str(llm_result).strip()}
+
+    if not isinstance(llm_result, dict):
+        return {"row_type": "", "cells": [], "field_pairs": [], "notes": str(llm_result).strip()}
+
+    normalized_cells = []
+    for cell_result in llm_result.get("cells", []):
+        if isinstance(cell_result, str):
+            try:
+                cell_result = json.loads(cell_result)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(cell_result, dict):
+            normalized_cells.append(cell_result)
+
+    normalized_pairs = []
+    for pair in llm_result.get("field_pairs", []):
+        if isinstance(pair, str):
+            try:
+                pair = json.loads(pair)
+            except json.JSONDecodeError:
+                continue
+        if isinstance(pair, dict):
+            normalized_pairs.append(pair)
+
+    return {
+        "row_type": llm_result.get("row_type", ""),
+        "cells": normalized_cells,
+        "field_pairs": normalized_pairs,
+        "notes": llm_result.get("notes", ""),
+    }
 
 
 def _is_row_heading(cells):
@@ -494,6 +546,16 @@ def _extract_row_field_pairs(cells):
     return pairs
 
 
+def _refresh_row_field_pairs(row, table_index=None):
+    field_pairs = _extract_row_field_pairs(row["cells"])
+    if table_index is not None:
+        for pair in field_pairs:
+            pair["table_index"] = table_index
+            pair["row_index"] = row["row_index"]
+    row["field_pairs"] = field_pairs
+    return field_pairs
+
+
 def _detect_matrix_block(header_row, value_row):
     """Detect a two-row horizontal matrix like month headers + numeric values."""
     header_cells = [cell for cell in header_row["cells"] if cell["raw_text"]]
@@ -576,6 +638,120 @@ def _detect_matrix_block(header_row, value_row):
         "entries": entries,
         "expanded_pairs": expanded_pairs,
     }
+
+
+def _is_column_header_like(cell):
+    text = cell["raw_text"].strip()
+    if not text:
+        return False
+    if cell["classification"] == "variable":
+        return False
+    header_markers = (
+        "金额", "余额", "利率", "期限", "日期", "方式", "分类", "比例",
+        "品种", "用途", "客户", "行名", "担保", "评级", "结果", "周期",
+        "供应商", "销售商", "出资", "区位", "证号", "面积", "是否",
+    )
+    if any(marker in text for marker in header_markers):
+        return True
+    if re.search(r"[（(].+[）)]", text):
+        return True
+    return len(text) <= 14
+
+
+def _is_column_value_like(cell):
+    text = cell["raw_text"].strip()
+    if not text:
+        return False
+    if cell["classification"] == "variable":
+        return True
+    if text in {"是", "否", "有", "无"}:
+        return True
+    if DATE_PATTERN.search(text) or MONEY_PATTERN.search(text) or PERCENT_PATTERN.search(text):
+        return True
+    if SHORT_NUMERIC_VALUE_PATTERN.fullmatch(text) or NUMERIC_WITH_UNIT_PATTERN.fullmatch(text):
+        return True
+    if _is_numeric_like_text(text):
+        return True
+    return False
+
+
+def _build_column_block(table_index, header_row, data_rows):
+    header_cells = [cell for cell in header_row["cells"] if cell["raw_text"].strip()]
+    records = []
+    for row in data_rows:
+        row_values = []
+        row_cell_map = {cell["cell_index"]: cell for cell in row["cells"]}
+        for header_cell in header_cells:
+            value_cell = row_cell_map.get(header_cell["cell_index"])
+            if value_cell is None:
+                continue
+            row_values.append(
+                {
+                    "header": header_cell["raw_text"],
+                    "header_cell_index": header_cell["cell_index"],
+                    "value": value_cell["raw_text"],
+                    "value_cell_index": value_cell["cell_index"],
+                }
+            )
+        if row_values:
+            records.append({"row_index": row["row_index"], "values": row_values})
+
+    return {
+        "type": "column_block",
+        "table_index": table_index,
+        "header_row_index": header_row["row_index"],
+        "data_row_indices": [row["row_index"] for row in data_rows],
+        "headers": [
+            {"cell_index": cell["cell_index"], "text": cell["raw_text"]}
+            for cell in header_cells
+        ],
+        "records": records,
+    }
+
+
+def _detect_table_column_blocks(table_index, rows):
+    column_blocks = []
+    idx = 0
+    while idx < len(rows) - 1:
+        header_row = rows[idx]
+        header_cells = [cell for cell in header_row["cells"] if cell["raw_text"].strip()]
+        if len(header_cells) < 4:
+            idx += 1
+            continue
+        if header_row["row_type"] != "field_row" or header_row.get("field_pairs"):
+            idx += 1
+            continue
+        header_like_count = sum(1 for cell in header_cells if _is_column_header_like(cell))
+        if header_like_count < max(3, len(header_cells) - 1):
+            idx += 1
+            continue
+
+        data_rows = []
+        next_idx = idx + 1
+        while next_idx < len(rows):
+            row = rows[next_idx]
+            if row["row_type"] != "field_row" or row.get("field_pairs"):
+                break
+            row_cells = [cell for cell in row["cells"] if cell["raw_text"].strip()]
+            if len(row_cells) < max(2, len(header_cells) - 2):
+                break
+            value_like_count = sum(1 for cell in row_cells if _is_column_value_like(cell))
+            if value_like_count < max(2, len(row_cells) // 3):
+                break
+            data_rows.append(row)
+            next_idx += 1
+
+        if data_rows:
+            header_row["structure_type"] = "column_header"
+            for row in data_rows:
+                row["structure_type"] = "column_data"
+            column_blocks.append(_build_column_block(table_index, header_row, data_rows))
+            idx = next_idx
+            continue
+
+        idx += 1
+
+    return column_blocks
 
 
 def _extract_table_matrix_blocks(rows):
@@ -696,6 +872,57 @@ def _build_document_blocks(tables):
     return blocks
 
 
+def _row_needs_llm(row):
+    non_empty_cells = [cell for cell in row["cells"] if cell["raw_text"].strip()]
+    if not non_empty_cells:
+        return False, "empty_row"
+
+    if row["row_type"] == "heading_row":
+        return False, "heading_row"
+
+    unknown_count = sum(1 for cell in non_empty_cells if cell["classification"] == "unknown")
+    merged_cell_count = sum(
+        1
+        for cell in non_empty_cells
+        if cell.get("span_width", 1) > 1 or cell.get("span_height", 1) > 1
+    )
+    high_confidence_count = sum(
+        1
+        for cell in non_empty_cells
+        if abs(cell["score_fixed"] - cell["score_variable"]) >= 2
+    )
+    high_confidence_ratio = high_confidence_count / len(non_empty_cells)
+
+    if row["field_pairs"]:
+        paired_indices = {
+            pair["label_cell_index"]
+            for pair in row["field_pairs"]
+        } | {
+            pair["value_cell_index"]
+            for pair in row["field_pairs"]
+        }
+        covered_ratio = len(paired_indices & {cell["cell_index"] for cell in non_empty_cells}) / len(non_empty_cells)
+        if covered_ratio >= 0.8 and unknown_count == 0 and merged_cell_count == 0:
+            return False, "pairs_cover_row"
+
+    if high_confidence_ratio >= 0.8 and unknown_count == 0 and merged_cell_count == 0:
+        return False, "high_confidence_row"
+
+    if unknown_count >= 1:
+        return True, "contains_unknown_cells"
+
+    if merged_cell_count >= 1 and high_confidence_ratio < 1.0:
+        return True, "merged_cells_need_review"
+
+    if not row["field_pairs"] and row["row_type"] == "field_row" and len(non_empty_cells) >= 3:
+        return True, "unpaired_field_row"
+
+    if high_confidence_ratio < 0.8:
+        return True, "low_confidence_row"
+
+    return False, "heuristics_sufficient"
+
+
 def _build_llm_row_payload(table_index, row_index, cells):
     return {
         "table_index": table_index,
@@ -731,9 +958,8 @@ def _build_llm_messages(row_payload):
         "instructions": [
             "阅读这一行表格单元格及其启发式结果。",
             "返回每个 cell_index 的最终 classification。",
-            "如果存在明显的标签和值关系，提取 field_pairs。",
             "row_type 只能是 heading_row、field_row、description_row 之一。",
-            "仅返回 JSON 对象，格式为 {row_type, cells, field_pairs, notes}。",
+            "仅返回 JSON 对象，格式为 {row_type, cells, notes}。",
         ],
         "row": row_payload,
     }
@@ -754,8 +980,21 @@ def _call_row_llm(client, model, row_payload):
     return json.loads(content)
 
 
-def _call_row_llm_with_client(model, base_url, api_key, row_payload):
-    client = OpenAI(api_key=api_key, base_url=base_url)
+def _call_row_llm_with_client(
+    model,
+    base_url,
+    api_key,
+    row_payload,
+    timeout=DEFAULT_LLM_TIMEOUT,
+    connect_timeout=DEFAULT_LLM_CONNECT_TIMEOUT,
+    max_retries=DEFAULT_LLM_MAX_RETRIES,
+):
+    client = OpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        timeout=httpx.Timeout(timeout, connect=connect_timeout),
+        max_retries=max_retries,
+    )
     return _call_row_llm(client, model, row_payload)
 
 
@@ -765,6 +1004,7 @@ def _chunked(items, chunk_size):
 
 
 def _apply_llm_row_result(row, llm_result):
+    llm_result = _normalize_llm_result(llm_result)
     cell_map = {cell["cell_index"]: cell for cell in row["cells"]}
     for cell_result in llm_result.get("cells", []):
         cell_index = cell_result.get("cell_index")
@@ -779,23 +1019,6 @@ def _apply_llm_row_result(row, llm_result):
     if row_type in {"heading_row", "field_row", "description_row"}:
         row["row_type"] = row_type
 
-    llm_pairs = []
-    for pair in llm_result.get("field_pairs", []):
-        label_index = pair.get("label_cell_index")
-        value_index = pair.get("value_cell_index")
-        if label_index not in cell_map or value_index not in cell_map:
-            continue
-        llm_pairs.append(
-            {
-                "label": cell_map[label_index]["raw_text"],
-                "label_cell_index": label_index,
-                "value": cell_map[value_index]["raw_text"],
-                "value_cell_index": value_index,
-            }
-        )
-    if llm_pairs:
-        row["field_pairs"] = llm_pairs
-
     row["llm_notes"] = str(llm_result.get("notes", "")).strip()
     return row
 
@@ -807,6 +1030,9 @@ def _refine_rows_with_llm(
     api_key=DEFAULT_LLM_API_KEY,
     max_workers=DEFAULT_LLM_MAX_WORKERS,
     batch_size=DEFAULT_LLM_BATCH_SIZE,
+    timeout=DEFAULT_LLM_TIMEOUT,
+    connect_timeout=DEFAULT_LLM_CONNECT_TIMEOUT,
+    max_retries=DEFAULT_LLM_MAX_RETRIES,
 ):
     if not base_url or not api_key:
         raise ValueError("LLM refinement requires DOC_TEMPLATE_LLM_BASE_URL and DOC_TEMPLATE_LLM_API_KEY.")
@@ -814,6 +1040,13 @@ def _refine_rows_with_llm(
     row_jobs = []
     for table in tables:
         for row in table["rows"]:
+            needs_llm, reason = _row_needs_llm(row)
+            row["llm_skipped_reason"] = ""
+            row["llm_selected_reason"] = ""
+            if not needs_llm:
+                row["llm_skipped_reason"] = reason
+                continue
+            row["llm_selected_reason"] = reason
             row_jobs.append(
                 {
                     "table_index": table["table_index"],
@@ -834,6 +1067,9 @@ def _refine_rows_with_llm(
                     base_url,
                     api_key,
                     job["payload"],
+                    timeout,
+                    connect_timeout,
+                    max_retries,
                 ): job
                 for job in batch
             }
@@ -850,10 +1086,7 @@ def _refine_rows_with_llm(
     for table in tables:
         table_pairs = []
         for row in table["rows"]:
-            for pair in row["field_pairs"]:
-                pair["table_index"] = table["table_index"]
-                pair["row_index"] = row["row_index"]
-            table_pairs.extend(row["field_pairs"])
+            table_pairs.extend(_refresh_row_field_pairs(row, table["table_index"]))
         table["field_pairs"] = table_pairs
     return tables
 
@@ -891,6 +1124,7 @@ def parse_docx_to_ir(docx_path):
     tables = []
     all_field_pairs = []
     all_matrix_blocks = []
+    all_column_blocks = []
     for table_index, table in enumerate(doc.tables):
         rows = []
         table_field_pairs = []
@@ -922,19 +1156,15 @@ def parse_docx_to_ir(docx_path):
             if _is_row_heading(cells):
                 row_type = "heading_row"
 
-            field_pairs = _extract_row_field_pairs(cells)
-            for pair in field_pairs:
-                pair.update({"table_index": table_index, "row_index": row_index})
-            table_field_pairs.extend(field_pairs)
-
-            rows.append(
-                {
-                    "row_index": row_index,
-                    "row_type": row_type,
-                    "cells": cells,
-                    "field_pairs": field_pairs,
-                }
-            )
+            row_payload = {
+                "row_index": row_index,
+                "row_type": row_type,
+                "cells": cells,
+                "field_pairs": [],
+                "structure_type": "",
+            }
+            table_field_pairs.extend(_refresh_row_field_pairs(row_payload, table_index))
+            rows.append(row_payload)
 
         matrix_blocks, matrix_row_indices = _extract_table_matrix_blocks(rows)
         for block in matrix_blocks:
@@ -947,6 +1177,8 @@ def parse_docx_to_ir(docx_path):
             if pair["row_index"] not in matrix_row_indices
         ]
         table_field_pairs = _dedupe_field_pairs(table_field_pairs)
+        column_blocks = _detect_table_column_blocks(table_index, rows)
+        all_column_blocks.extend(column_blocks)
         tables.append(
             {
                 "type": "table",
@@ -954,6 +1186,7 @@ def parse_docx_to_ir(docx_path):
                 "rows": rows,
                 "field_pairs": table_field_pairs,
                 "matrix_blocks": matrix_blocks,
+                "column_blocks": column_blocks,
             }
         )
         all_field_pairs.extend(table_field_pairs)
@@ -965,10 +1198,22 @@ def parse_docx_to_ir(docx_path):
         "blocks": blocks,
         "field_pairs": _dedupe_field_pairs(all_field_pairs),
         "matrix_blocks": all_matrix_blocks,
+        "column_blocks": all_column_blocks,
     }
 
 
-def extract_from_ir(ir, use_llm=False, llm_model=DEFAULT_LLM_MODEL, llm_base_url=DEFAULT_LLM_BASE_URL, llm_api_key=DEFAULT_LLM_API_KEY, llm_max_workers=DEFAULT_LLM_MAX_WORKERS, llm_batch_size=DEFAULT_LLM_BATCH_SIZE):
+def extract_from_ir(
+    ir,
+    use_llm=False,
+    llm_model=DEFAULT_LLM_MODEL,
+    llm_base_url=DEFAULT_LLM_BASE_URL,
+    llm_api_key=DEFAULT_LLM_API_KEY,
+    llm_max_workers=DEFAULT_LLM_MAX_WORKERS,
+    llm_batch_size=DEFAULT_LLM_BATCH_SIZE,
+    llm_timeout=DEFAULT_LLM_TIMEOUT,
+    llm_connect_timeout=DEFAULT_LLM_CONNECT_TIMEOUT,
+    llm_max_retries=DEFAULT_LLM_MAX_RETRIES,
+):
     """Extract final results from IR, optionally refining rows with LLM."""
     tables = ir["tables"]
     if use_llm:
@@ -979,19 +1224,25 @@ def extract_from_ir(ir, use_llm=False, llm_model=DEFAULT_LLM_MODEL, llm_base_url
             api_key=llm_api_key,
             max_workers=llm_max_workers,
             batch_size=llm_batch_size,
+            timeout=llm_timeout,
+            connect_timeout=llm_connect_timeout,
+            max_retries=llm_max_retries,
         )
 
     all_field_pairs = []
     all_matrix_blocks = []
+    all_column_blocks = []
     for table in tables:
         all_field_pairs.extend(table["field_pairs"])
         all_matrix_blocks.extend(table.get("matrix_blocks", []))
+        all_column_blocks.extend(table.get("column_blocks", []))
 
     return {
         "tables": tables,
         "blocks": _build_document_blocks(tables),
         "field_pairs": _dedupe_field_pairs(all_field_pairs),
         "matrix_blocks": all_matrix_blocks,
+        "column_blocks": all_column_blocks,
     }
 
 
@@ -1003,6 +1254,9 @@ def extract_docx_template(
     llm_api_key=DEFAULT_LLM_API_KEY,
     llm_max_workers=DEFAULT_LLM_MAX_WORKERS,
     llm_batch_size=DEFAULT_LLM_BATCH_SIZE,
+    llm_timeout=DEFAULT_LLM_TIMEOUT,
+    llm_connect_timeout=DEFAULT_LLM_CONNECT_TIMEOUT,
+    llm_max_retries=DEFAULT_LLM_MAX_RETRIES,
 ):
     """Parse a DOCX file and extract table semantics."""
     ir = parse_docx_to_ir(docx_path)
@@ -1014,6 +1268,9 @@ def extract_docx_template(
         llm_api_key=llm_api_key,
         llm_max_workers=llm_max_workers,
         llm_batch_size=llm_batch_size,
+        llm_timeout=llm_timeout,
+        llm_connect_timeout=llm_connect_timeout,
+        llm_max_retries=llm_max_retries,
     )
     return {
         "paragraphs": ir["paragraphs"],
@@ -1021,6 +1278,7 @@ def extract_docx_template(
         "blocks": extracted["blocks"],
         "field_pairs": extracted["field_pairs"],
         "matrix_blocks": extracted["matrix_blocks"],
+        "column_blocks": extracted["column_blocks"],
     }
 
 
@@ -1037,5 +1295,7 @@ if __name__ == "__main__":
     #     raise SystemExit("Usage: python extract_doc_template.py <template.docx> [--use-llm]")
 
     # result = extract_docx_template(args[0], use_llm=use_llm)
+    # result = extract_docx_template("D:\\Python Project\\Hermes\\filled-专精特新类公司调查报告.docx", use_llm=True)
     result = extract_docx_template("D:\\Python Project\\Hermes\\filled-专精特新类公司调查报告.docx")
+    # result = extract_docx_template("D:\\Python Project\\Hermes\\公司类调查报告模板.docx")
     print(json.dumps(result, ensure_ascii=False, indent=2))
